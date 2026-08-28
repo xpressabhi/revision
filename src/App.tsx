@@ -19,7 +19,7 @@ import { nextState } from "./lib/srs";
 import type { CardWithState, Deck, DeckStats, Grade } from "./lib/types";
 import { MarkdownView } from "./lib/markdown";
 import { parseCsv, toCsv } from "./lib/csv";
-import { SEED_CARDS } from "./lib/seed";
+import { SEED_CARDS, BLIND75_SEED } from "./lib/seed";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
@@ -290,6 +290,13 @@ export default function App() {
     await refreshQueue();
   }
 
+  async function handleSeedBlind75() {
+    const n = await bulkCreateCards(BLIND75_SEED.map((c) => ({ deckName: c.deck, front: c.front, back: c.back, tags: c.tags })));
+    setToast(`Seeded ${n} Blind 75 cards`);
+    await refresh();
+    await refreshQueue();
+  }
+
   async function handleCreateDeck() {
     const name = newDeckName.trim();
     if (!name) return;
@@ -538,10 +545,11 @@ export default function App() {
                 <p>Add your first DSA or System Design card, or seed the starter set.</p>
                 <div className="empty-actions">
                   <button className="btn primary" onClick={handleSeed}>Seed 13 starter cards</button>
+                  <button className="btn primary" onClick={handleSeedBlind75} style={{ background: "#0ea5e9", borderColor: "#0ea5e9" }}>Seed Blind 75 (75)</button>
                   <button className="btn" onClick={() => setShowAdd(true)}>Add card manually</button>
                 </div>
                 <div className="seed-preview">
-                  <div className="muted small">Seed includes: 3 DSA, 3 SD Concepts, 2 SD Use Cases, 2 AI Concepts, 1 AI Use Case, 2 Behavioral</div>
+                  <div className="muted small">Seed 13: 3 DSA, 3 SD Concepts, 2 SD Use Cases, 2 AI Concepts, 1 AI Use Case, 2 Behavioral<br />Blind 75: Full LeetCode Blind 75 list from oizxjoit (DSA) — also available as blind75.csv for Import</div>
                 </div>
               </div>
             )}
