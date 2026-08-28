@@ -20,6 +20,7 @@ import type { CardWithState, Deck, DeckStats, Grade } from "./lib/types";
 import { MarkdownView } from "./lib/markdown";
 import { parseCsv, toCsv } from "./lib/csv";
 import { SEED_CARDS } from "./lib/seed";
+import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 type View = "today" | "review" | "browse";
@@ -114,6 +115,34 @@ export default function App() {
     const t = setTimeout(() => setToast(null), 2500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Sync tray with due/new counts
+  useEffect(() => {
+    if (!isTauriEnv || stats.length === 0) return;
+    const due = stats.reduce((a, s) => a + s.due, 0);
+    const newCount = stats.reduce((a, s) => a + s.newCount, 0);
+    const total = stats.reduce((a, s) => a + s.total, 0);
+    const decks = stats.map((s) => ({ name: s.deck_name, due: s.due, total: s.total }));
+    invoke("update_tray", { due, new: newCount, total, decks }).catch(() => {});
+  }, [stats, isTauriEnv]);
+
+  // Listen for tray Review action
+  useEffect(() => {
+    if (!isTauriEnv) return;
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen("tray-review", () => {
+          refreshQueue();
+          setView("review");
+        });
+      } catch {}
+    })();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [isTauriEnv]);
 
   // Keyboard shortcuts for review
   useEffect(() => {
@@ -340,6 +369,10 @@ export default function App() {
     }
   }
 
+  function toggleWidget() {
+    invoke("toggle_widget").catch((e) => setToast(String(e)));
+  }
+
   if (loading) {
     return (
       <div className="loading">
@@ -427,6 +460,7 @@ export default function App() {
                   <button className="btn small full" onClick={checkForUpdateManual} disabled={checkingUpdate}>{checkingUpdate ? "Checking…" : "Check for updates"}</button>
                 )}
               </div>
+              <button className="btn small full" onClick={toggleWidget} style={{ marginTop: 8 }}>◫ Toggle Widget</button>
             </>
           ) : (
             <div className="foot-hint">Browser preview — no auto-update</div>
@@ -446,6 +480,7 @@ export default function App() {
               <div className="head-actions">
                 <button className="btn" onClick={handleExport}>Export CSV</button>
                 <button className="btn" onClick={() => fileInputRef.current?.click()}>Import CSV</button>
+                {isTauriEnv && <button className="btn" onClick={toggleWidget}>◫ Widget</button>}
                 <input ref={fileInputRef} type="file" accept=".csv,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = ""; }} />
                 <button className="btn primary" onClick={() => { refreshQueue(); setView("review"); }} disabled={dueQueue.length === 0}>
                   Start Review →

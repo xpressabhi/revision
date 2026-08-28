@@ -12,11 +12,28 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Revision — Active Recall",
         "width": 1120,
         "height": 760,
         "minWidth": 960,
         "minHeight": 640
+      },
+      {
+        "label": "widget",
+        "title": "Revision — Today",
+        "url": "index.html?widget=1",
+        "width": 340,
+        "height": 190,
+        "minWidth": 300,
+        "minHeight": 150,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "resizable": true,
+        "shadow": true
       }
     ],
     "security": {
