@@ -12,7 +12,9 @@
     "tauri:build": "tauri build",
     "tauri:build:debug": "tauri build --debug",
     "tauri:build:install": "tauri build --debug && ./scripts/install-to-applications.sh",
-    "tauri:build:release": "tauri build"
+    "tauri:build:release": "tauri build",
+    "widget:build": "./scripts/build-widget.sh",
+    "widget:install": "./scripts/build-widget.sh && killall Dock"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

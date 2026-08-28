@@ -46,6 +46,19 @@ xattr -dr com.apple.quarantine "${DEST}" 2>/dev/null || true
 touch "${DEST}" 2>/dev/null || true
 
 echo "✓ Installed to ${DEST}"
+
+# Embed desktop widget (WidgetKit) if available — appears alongside Stocks/Clock/Battery in Edit Widgets
+if [ -d "src-tauri/RevisionWidget" ] && command -v xcodegen >/dev/null 2>&1; then
+  echo "→ Building desktop widget (WidgetKit)..."
+  if ./scripts/build-widget.sh 2>&1 | tail -n 20; then
+    echo "✓ Widget embedded — add via Desktop → right-click → Edit Widgets → Search 'Revision'"
+    # Refresh widget gallery
+    pluginkit -a "/Applications/Revision.app/Contents/PlugIns/RevisionWidget.appex" 2>/dev/null || true
+  else
+    echo "⚠ Widget build failed — main app still installed (widget optional, shows Due/New in tray + in-app widget window)"
+  fi
+fi
+
 echo "→ Launching..."
 
 open "${DEST}" 2>/dev/null || true

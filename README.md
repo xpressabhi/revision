@@ -50,19 +50,26 @@ Image paste stores as data URL inside `back`.
 ```
 revision/
   src/
-    App.tsx                 # 3 views: Today / Review / Browse + modals
-    lib/db.ts               # SQLite + localStorage fallback
+    App.tsx                 # 3 views: Today / Review / Browse + modals + tray/widget sync
+    Widget.tsx              # 340×190 transparent widget window (Due/New/Total)
+    lib/db.ts               # SQLite + localStorage fallback + clear/dedup
     lib/db.browser.ts       # localStorage impl
     lib/srs.ts              # SM-2 nextState()
-    lib/types.ts, csv.ts, seed.ts, markdown.tsx
-    App.css                 # design system
+    lib/types.ts, csv.ts, seed.ts (SEED_CARDS 13 + BLIND75_SEED 75), markdown.tsx (links)
+    App.css                 # design system + widget
   src-tauri/
-    Cargo.toml, tauri.conf.json, capabilities/default.json
-  public/
+    Cargo.toml, tauri.conf.json (main + widget windows, updater), capabilities/default.json
+    RevisionWidget/         # WidgetKit desktop widget (Swift, project.yml via xcodegen)
+      RevisionWidget/RevisionWidget.swift  # TimelineProvider reads revision.db, shows Due/New
+  public/blind75.csv        # Blind 75 import file
+  scripts/install-to-applications.sh  # builds + embeds widget + copies to /Applications
+  scripts/build-widget.sh             # xcodegen + xcodebuild widget appex
 ```
 
-### Tray & Autostart (no terminal)
-- **Tray:** Closing the window hides to tray (not quit) — left-click tray to show, right-click `Show / Quit`.
+### Tray, Widgets & Autostart (no terminal)
+- **Tray (always visible):** Shows `Due X • New Y` in tooltip + `Due X` title, menu header `Revision — Due X • New Y • Total Z` with per-deck breakdown, actions `▶ Start Review` (opens Review), `Show Revision`, `Toggle Widget`, `Quit`. Live-updates via `update_tray` on every `getDeckStats`.
+- **In-app widget window:** `340×190` transparent always-on-top (`src-tauri/tauri.conf.json` `widget` window, `src/Widget.tsx`) — shows `Due/New/Total` KPIs + deck due list + `Review` button. Toggle via tray `Toggle Widget` or in-app `◫ Widget` (Today header + sidebar foot `Toggle Widget`), `×` hides. Drag header to move.
+- **macOS Desktop Widget (WidgetKit):** Native widget addable alongside Stocks/Clock/Battery via `Desktop → right-click → Edit Widgets → search "Revision" → Add "Due Today"` (small/medium). Reads `~/Library/Application Support/com.revision.app/revision.db` directly via SQLite3, shows `Due/New/Total` + 4 decks, refreshes every 15 min. Tap widget opens `Revision.app`. Built from `src-tauri/RevisionWidget/` (Swift + WidgetKit, `project.yml` via `xcodegen`), embedded as `Revision.app/Contents/PlugIns/RevisionWidget.appex` on `tauri:build:install` (also `npm run widget:build`).
 - **Launch at login:** Sidebar foot toggle `Launch at login` uses `tauri-plugin-autostart` (macOS LaunchAgent).
 
 ### Auto-Update
