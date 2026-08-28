@@ -15,6 +15,14 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:default",
-    "core:path:default"
+    "core:path:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "autostart:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

@@ -55,6 +55,8 @@ export default function App() {
   const [form, setForm] = useState({ deckId: 0, front: "", back: "", tags: "" });
   const [showDeckMgr, setShowDeckMgr] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [isTauriEnv, setIsTauriEnv] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentCard = dueQueue[reviewIdx] ?? null;
@@ -81,6 +83,15 @@ export default function App() {
         await initDb();
         await refresh();
         await refreshQueue();
+        // Detect Tauri env and load autostart state
+        const tauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+        setIsTauriEnv(tauri);
+        if (tauri) {
+          try {
+            const { isEnabled } = await import("@tauri-apps/plugin-autostart");
+            setAutostartEnabled(await isEnabled());
+          } catch {}
+        }
       } catch (e) {
         console.error(e);
         setToast(String(e));
@@ -264,6 +275,23 @@ export default function App() {
     setToast("Deck deleted");
   }
 
+  async function toggleAutostart() {
+    try {
+      const { enable, disable } = await import("@tauri-apps/plugin-autostart");
+      if (autostartEnabled) {
+        await disable();
+        setAutostartEnabled(false);
+        setToast("Autostart disabled");
+      } else {
+        await enable();
+        setAutostartEnabled(true);
+        setToast("Will launch at login");
+      }
+    } catch (e) {
+      setToast(String(e));
+    }
+  }
+
   if (loading) {
     return (
       <div className="loading">
@@ -338,7 +366,15 @@ export default function App() {
             <span>DB</span>
             <strong>prep.db</strong>
           </div>
-          <div className="foot-hint">SQLite • local file • portable<br />Space: reveal • 1/2/3: grade</div>
+          {isTauriEnv ? (
+            <label className="foot-toggle">
+              <input type="checkbox" checked={autostartEnabled} onChange={toggleAutostart} />
+              <span>Launch at login</span>
+            </label>
+          ) : (
+            <div className="foot-hint">Browser preview — no autostart</div>
+          )}
+          <div className="foot-hint">Close → minimizes to tray<br />SQLite • portable<br />Space: reveal • 1/2/3: grade</div>
         </div>
       </aside>
 
