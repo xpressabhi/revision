@@ -377,3 +377,39 @@ export async function bulkCreateCards(
     return browserBulkCreateCards(rows);
   }
 }
+
+export async function clearAllCards(): Promise<void> {
+  const { browserClearAllCards } = await import("./db.browser");
+  if (!isTauri()) return browserClearAllCards();
+  try {
+    const db = await getDb();
+    await db.execute("DELETE FROM reviews");
+    await db.execute("DELETE FROM card_state");
+    await db.execute("DELETE FROM cards");
+    await db.execute("DELETE FROM sqlite_sequence WHERE name='cards' OR name='reviews'");
+  } catch {
+    return browserClearAllCards();
+  }
+}
+
+export async function deduplicateCards(): Promise<number> {
+  const { browserDeduplicateCards } = await import("./db.browser");
+  if (!isTauri()) return browserDeduplicateCards();
+  try {
+    const all = await getAllCardsWithState();
+    const seen = new Map<string, number>();
+    let removed = 0;
+    for (const c of all) {
+      const key = `${c.deck_id}::${c.front.trim()}`;
+      if (!seen.has(key)) {
+        seen.set(key, c.id);
+      } else {
+        await deleteCard(c.id);
+        removed++;
+      }
+    }
+    return removed;
+  } catch {
+    return browserDeduplicateCards();
+  }
+}

@@ -10,6 +10,8 @@ import {
   updateCardState,
   logReview,
   bulkCreateCards,
+  clearAllCards,
+  deduplicateCards,
   initDb,
   exportAllCards,
   createDeck,
@@ -211,6 +213,16 @@ export default function App() {
   const newTotal = stats.reduce((a, s) => a + s.newCount, 0);
   const totalCards = stats.reduce((a, s) => a + s.total, 0);
   const hasBlind75 = useMemo(() => allCards.some((c) => c.tags.includes("blind75")), [allCards]);
+  const duplicateCount = useMemo(() => {
+    const seen = new Set<string>();
+    let dup = 0;
+    for (const c of allCards) {
+      const k = `${c.deck_id}::${c.front.trim()}`;
+      if (seen.has(k)) dup++;
+      else seen.add(k);
+    }
+    return dup;
+  }, [allCards]);
 
   async function handleAddOrUpdate() {
     if (!form.front.trim() || !form.back.trim()) {
@@ -300,6 +312,23 @@ export default function App() {
     }
     const n = await bulkCreateCards(toCreate);
     setToast(`Seeded ${n} Blind 75 cards — now ${totalCards + n} total`);
+    await refresh();
+    await refreshQueue();
+  }
+
+  async function handleResetDb() {
+    if (!confirm(`Reset everything? This will delete ALL ${totalCards} cards and cannot be undone.\n\nYou can then re-seed Blind 75 cleanly to 75 or 88 total.`)) return;
+    if (!confirm(`Are you sure? This deletes ${totalCards} cards permanently.`)) return;
+    await clearAllCards();
+    setToast("Reset — all cards deleted");
+    await refresh();
+    await refreshQueue();
+  }
+
+  async function handleDeduplicate() {
+    const removed = await deduplicateCards();
+    if (removed === 0) setToast("No duplicates found");
+    else setToast(`Removed ${removed} duplicate cards`);
     await refresh();
     await refreshQueue();
   }
@@ -548,6 +577,17 @@ export default function App() {
               </div>
             )}
 
+            {duplicateCount > 0 && (
+              <div className="empty" style={{ borderColor: "#f59e0b", background: "#fffbeb", marginBottom: 14 }}>
+                <h3>⚠ {duplicateCount} duplicates — Blind 75 imported multiple times</h3>
+                <p>Same front detected in same deck. Deduplicate keeps one per question, or Reset to clear and re-seed cleanly.</p>
+                <div className="empty-actions">
+                  <button className="btn primary" onClick={handleDeduplicate} style={{ background: "#f59e0b", borderColor: "#f59e0b" }}>Deduplicate — remove {duplicateCount}</button>
+                  <button className="btn" onClick={handleResetDb}>Reset Everything</button>
+                </div>
+              </div>
+            )}
+
             <div className="decks-grid">
               {stats.map((s) => (
                 <div key={s.deck_id} className="deck-card" style={{ borderLeftColor: deckColor(s.deck_name) }}>
@@ -700,6 +740,10 @@ export default function App() {
                 <option value="review">review</option>
               </select>
               <span className="muted small">{filteredBrowse.length} cards</span>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+                {duplicateCount > 0 && <button className="btn small" onClick={handleDeduplicate} style={{ background: "#fffbeb", borderColor: "#fde68a" }}>Deduplicate ({duplicateCount})</button>}
+                <button className="btn small" onClick={handleResetDb} style={{ color: "#b91c1c", borderColor: "#fecaca", background: "#fef2f2" }}>Reset DB</button>
+              </div>
             </div>
 
             <div className="table-wrap">

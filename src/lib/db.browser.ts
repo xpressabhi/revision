@@ -229,3 +229,33 @@ export async function browserBulkCreateCards(rows: { deckName: string; front: st
   }
   return created;
 }
+
+export async function browserClearAllCards() {
+  save(LS_CARDS, []);
+  save(LS_STATES, []);
+  save(LS_REVIEWS, []);
+  const seq = load<Record<string, number>>(LS_SEQ, {});
+  save(LS_SEQ, { ...seq, cards: 0, reviews: 0 });
+}
+
+export async function browserDeduplicateCards(): Promise<number> {
+  const cards = load<any[]>(LS_CARDS, []);
+  const states = load<CardState[]>(LS_STATES, []);
+  const reviews = load<ReviewRow[]>(LS_REVIEWS, []);
+  const seen = new Map<string, number>();
+  const toDelete: number[] = [];
+  for (const c of cards) {
+    const key = `${c.deck_id}::${c.front.trim()}`;
+    if (!seen.has(key)) {
+      seen.set(key, c.id);
+    } else {
+      toDelete.push(c.id);
+    }
+  }
+  if (toDelete.length === 0) return 0;
+  const delSet = new Set(toDelete);
+  save(LS_CARDS, cards.filter((c: any) => !delSet.has(c.id)));
+  save(LS_STATES, states.filter((s) => !delSet.has(s.card_id)));
+  save(LS_REVIEWS, reviews.filter((r) => !delSet.has(r.card_id)));
+  return toDelete.length;
+}
