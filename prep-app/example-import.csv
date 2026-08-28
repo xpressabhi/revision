@@ -1,0 +1,12 @@
+deck,front,back,tags
+"DSA / LeetCode","Two Sum — Pattern? Approach?","**Pattern:** Hash Map
+Iterate, check `target - x` in map.
+`O(n)` time `O(n)` space.","array, hashmap, easy"
+"DSA / LeetCode","Longest Substring Without Repeating — Template?","**Sliding Window:** `left=0, for right expand, while duplicate shrink, update max`","sliding-window, pattern"
+"System Design Concepts","CAP — explain","**C**onsistency **A**vailability **P**artition tolerance — pick 2 under partition. In practice latency vs consistency.","cap, distributed"
+"System Design Use Cases","Design Rate Limiter — algorithms?","**Token Bucket** burst, **Leaky** smooth, **Fixed Window** simple, **Sliding Window** precise. Distributed via Redis Lua.","system-design, rate-limiter"
+"AI Concepts","RAG — failures?","Chunker -> Embedder -> Vector DB -> Retriever -> LLM. Fail: bad chunking, drift, LLM ignores context, stale index. Fix hybrid+reranker.","rag, llm"
+"Behavioral","Best project — STAR (2m)","**S:** Scale X 1k->1M QPS
+**T:** Lead design
+**A:** Event-driven, mentored 2
+**R:** -40% latency, lesson: influence without authority","behavioral, STAR"

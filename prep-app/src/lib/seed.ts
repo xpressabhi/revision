@@ -1,0 +1,80 @@
+export const SEED_CARDS: { deck: string; front: string; back: string; tags: string }[] = [
+  {
+    deck: "DSA / LeetCode",
+    front: "Two Sum — Pattern? Approach? Complexity?",
+    back: "**Pattern:** Hash Map\n\n**Approach:** Iterate, for each `x` check if `target - x` in map → return indices. Else store `x -> i`.\n\n**Complexity:** `O(n)` time, `O(n)` space.\n\n**Trap:** Duplicate values, return indices not values.",
+    tags: "array, hashmap, easy",
+  },
+  {
+    deck: "DSA / LeetCode",
+    front: "Sliding Window — When to use? Example problem?",
+    back: "**When:** Contiguous subarray/substring with constraint (max/min length, sum, distinct `k`).\n\n**Template:** `left=0, for right... expand, while invalid shrink left, update ans`.\n\n**Ex:** Longest substring without repeating characters, Minimum window substring.",
+    tags: "sliding-window, pattern",
+  },
+  {
+    deck: "DSA / LeetCode",
+    front: "DFS vs BFS — tradeoffs in graphs/trees?",
+    back: "**DFS:** Stack/recursion, `O(h)` space, good for path existence, topological sort. May overflow.\n\n**BFS:** Queue, `O(w)` space, good for shortest path unweighted. Level order.\n\n**Both `O(V+E)`**.",
+    tags: "graph, traversal",
+  },
+  {
+    deck: "System Design Concepts",
+    front: "CAP Theorem — explain with example",
+    back: "**C**onsistency, **A**vailability, **P**artition tolerance — pick 2. In partition, choose CP (e.g., ZK) or AP (e.g., Dynamo). RDBMS is CA only without partition.\n\n**Principal nuance:** In practice it's latency vs consistency under partition.",
+    tags: "cap, distributed",
+  },
+  {
+    deck: "System Design Concepts",
+    front: "Cache — Cache-Aside vs Write-Through vs Write-Behind?",
+    back: "**Cache-Aside:** App loads DB on miss, app writes DB then invalidates. Simple, stale risk.\n**Write-Through:** Write to cache + DB synchronously. Strong consistency, write latency.\n**Write-Behind:** Async DB write. Fast but loss risk.\n\n**Principal:** Choose based on read/write ratio + durability.",
+    tags: "cache, pattern",
+  },
+  {
+    deck: "System Design Concepts",
+    front: "Sharding vs Partitioning — how to pick shard key?",
+    back: "**Goal:** Even distribution, avoid hot shard, support queries.\n**Good key:** High cardinality, uniform (user_id). Avoid low cardinality (country).\n**Strategies:** Hash (even), Range (range queries), Consistent hash (re-balance).\n**Follow-up:** How to handle re-sharding? Double-write.",
+    tags: "sharding, database",
+  },
+  {
+    deck: "System Design Use Cases",
+    front: "Design URL Shortener — FR/NFR, scale numbers?",
+    back: "**FR:** Shorten, redirect, expiry, custom alias.\n**NFR:** ~100M URLs/day, read-heavy 100:1, <100ms redirect, 5yr retention.\n**Scale:** 500M URLs/mo → ~100B in 5y → ~5TB metadata.\n**HLD:** API → App → Cache (Redis) → DB (sharded KV by hash) + Base62 vs random 7-char.",
+    tags: "system-design, shortener",
+  },
+  {
+    deck: "System Design Use Cases",
+    front: "Design Rate Limiter — algorithms?",
+    back: "**Token Bucket:** Burst-friendly. **Leaky Bucket:** Smooth. **Fixed Window:** Simple but boundary burst. **Sliding Window Log/Counter:** Precise, more memory.\n\n**Distributed:** Redis + Lua script, `SET key count EX window`. **Principal add:** Per-user vs per-IP vs global, response headers `X-RateLimit-*`.",
+    tags: "system-design, rate-limiter",
+  },
+  {
+    deck: "AI Concepts",
+    front: "RAG — components and failure modes?",
+    back: "**Components:** Chunker → Embedder → Vector DB → Retriever (top-k) → LLM with context.\n**Failures:** Bad chunking (loss of context), poor recall (embedding drift), LLM ignores retrieved docs, stale index.\n**Fix:** Hybrid search (BM25+vector), reranker, eval with hit-rate/MRR.",
+    tags: "rag, llm",
+  },
+  {
+    deck: "AI Concepts",
+    front: "Vector DB — HNSW vs IVF? When to use which?",
+    back: "**HNSW:** Graph, fast query (<10ms), high recall, high memory. Good for <10M vectors.\n**IVF:** Cluster, lower memory, slower, needs nprobe tuning. Better for >100M.\n**Principal:** Measure recall@k vs latency for your n.",
+    tags: "vector-db, retrieval",
+  },
+  {
+    deck: "AI Use Cases",
+    front: "Design AI Search (like Perplexity) — flow?",
+    back: "**Flow:** Query → Query rewrite → Hybrid retrieval (web + vector) → Rerank → LLM synthesize with citations → Guardrails.\n**Key:** Freshness (crawl), attribution, cost (cache embeddings), eval (answer relevance).",
+    tags: "ai-system, search",
+  },
+  {
+    deck: "Behavioral",
+    front: "Tell me about your best project — STAR (2 min)",
+    back: "**S:** Context: scaling X from 1k→1M QPS, team of 5, 3-month deadline.\n**T:** Your ownership: design, unblock.\n**A:** Tradeoffs: chose event-driven over sync, mentored 2 engineers, negotiated scope.\n**R:** Impact: -40% latency, +$Y revenue, lesson: influence without authority.",
+    tags: "behavioral, STAR",
+  },
+  {
+    deck: "Behavioral",
+    front: "Conflict with peer/stakeholder — how did you handle?",
+    back: "**STAR:** Disagreement on tech choice. Listened 1:1, data over opinion, ran spike/ADR, proposed 2 options with tradeoffs, escalated with recommendation not complaint. **Principal lens:** Disagree & commit, earn trust.",
+    tags: "behavioral, leadership",
+  },
+];
