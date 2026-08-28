@@ -35,7 +35,7 @@ npm run build            # web build only -> dist/
 
 ### DB Location
 - Tauri: app data dir — e.g. `~/Library/Application Support/com.revision.app/revision.db` (macOS). Portable: `Export CSV` to backup.
-- Browser: `localStorage` keys `prep_cards`, `prep_states`, etc. Clear site data to reset.
+- Browser: `localStorage` keys `revision_cards`, `revision_states`, etc. Clear site data to reset.
 
 ### CSV Format
 Header optional but recommended:
@@ -58,7 +58,7 @@ revision/
     lib/types.ts, csv.ts, seed.ts (SEED_CARDS 13 + BLIND75_SEED 75), markdown.tsx (links)
     App.css                 # design system + widget
   src-tauri/
-    Cargo.toml, tauri.conf.json (main + widget windows, updater), capabilities/default.json
+    Cargo.toml, tauri.conf.json (main + widget windows), capabilities/default.json
     RevisionWidget/         # WidgetKit desktop widget (Swift, project.yml via xcodegen)
       RevisionWidget/RevisionWidget.swift  # TimelineProvider reads revision.db, shows Due/New
   public/blind75.csv        # Blind 75 import file
@@ -72,24 +72,13 @@ revision/
 - **macOS Desktop Widget (WidgetKit):** Native widget addable alongside Stocks/Clock/Battery via `Desktop → right-click → Edit Widgets → search "Revision" → Add "Due Today"` (small/medium). Reads `~/Library/Application Support/com.revision.app/revision.db` directly via SQLite3, shows `Due/New/Total` + 4 decks, refreshes every 15 min. Tap widget opens `Revision.app`. Built from `src-tauri/RevisionWidget/` (Swift + WidgetKit, `project.yml` via `xcodegen`), embedded as `Revision.app/Contents/PlugIns/RevisionWidget.appex` on `tauri:build:install` (also `npm run widget:build`).
 - **Launch at login:** Sidebar foot toggle `Launch at login` uses `tauri-plugin-autostart` (macOS LaunchAgent).
 
-### Auto-Update
-Two modes:
-1. **Local rebuild → auto-install to /Applications (for you as dev):**
-   ```bash
-   npm run tauri:build:install   # builds then copies .app to /Applications and relaunches (tray refreshes)
-   # or manually: ./scripts/install-to-applications.sh
-   ```
-   Script quits running app, `cp -R` new bundle, clears quarantine, `open`s it — tray icon/menu update on next launch.
-
-2. **Remote auto-update when new GitHub Release is available (for installed app):**
-   - App checks on launch via `tauri-plugin-updater` — sidebar foot shows `Check for updates` / `Update to vX →` if found.
-   - Configure real repo in `src-tauri/tauri.conf.json:plugins.updater.endpoints`:
-     ```json
-     "endpoints": ["https://github.com/YOUR_USER/YOUR_REPO/releases/latest/download/latest.json"]
-     ```
-     Current placeholder is `REPLACE_ME/REPLACE_ME` — replace with your GitHub repo, then push with `tauri-action` to generate `latest.json` + signed updater artifacts (`createUpdaterArtifacts: v1Compatible` already enabled).
-   - Private key at `src-tauri/keys/updater-key` (ignored), public key already in `tauri.conf.json:pubkey`. For CI, set `TAURI_SIGNING_PRIVATE_KEY` env.
-   - Manual check: sidebar `Check for updates` → `Update to vX →` → downloads, installs, `relaunch` (tray refreshes).
+### Updates (local only — no GitHub)
+- Rebuild locally and auto-install to `/Applications`:
+  ```bash
+  npm run tauri:build:install   # builds (debug) then copies .app to /Applications, embeds widget, and relaunches (tray/widget refresh)
+  # or manually: ./scripts/install-to-applications.sh
+  ```
+  Script quits running app, `cp -R` new bundle, clears quarantine, `open`s it — tray icon/menu/widget update on next launch. No remote updater (removed `tauri-plugin-updater` — personal use only).
 
 ### Tauri Setup
 Requires Rust 1.70+ and system deps (Xcode CLI tools on macOS). No extra config — `tauri-plugin-sql` with `sqlite` feature already added.

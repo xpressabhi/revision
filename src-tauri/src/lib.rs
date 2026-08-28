@@ -101,8 +101,6 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let show_i = MenuItem::with_id(app, "show", "Show Revision", true, None::<&str>)?;
             let review_i = MenuItem::with_id(app, "review", "▶ Start Review", true, None::<&str>)?;
