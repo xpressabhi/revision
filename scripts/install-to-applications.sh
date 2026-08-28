@@ -8,8 +8,8 @@ SRC="src-tauri/target/release/bundle/macos/${APP_NAME}"
 DEST="/Applications/${APP_NAME}"
 
 if [ ! -d "${SRC}" ]; then
-  # Tauri v2 may put it under bundle/macos/*.app or bundle/dmg/*.app — search
-  FOUND=$(find src-tauri/target/release/bundle -name "${APP_NAME}" -type d 2>/dev/null | head -n 1 || true)
+  # Prefer release, fallback to debug (debug builds faster and works when release has sqlx LINKEDIT issue on this toolchain)
+  FOUND=$(find src-tauri/target/release/bundle src-tauri/target/debug/bundle -name "${APP_NAME}" -type d 2>/dev/null | head -n 1 || true)
   if [ -n "${FOUND}" ]; then
     SRC="${FOUND}"
   else
