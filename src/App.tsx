@@ -210,6 +210,7 @@ export default function App() {
   const dueTotal = stats.reduce((a, s) => a + s.due, 0);
   const newTotal = stats.reduce((a, s) => a + s.newCount, 0);
   const totalCards = stats.reduce((a, s) => a + s.total, 0);
+  const hasBlind75 = useMemo(() => allCards.some((c) => c.tags.includes("blind75")), [allCards]);
 
   async function handleAddOrUpdate() {
     if (!form.front.trim() || !form.back.trim()) {
@@ -291,8 +292,14 @@ export default function App() {
   }
 
   async function handleSeedBlind75() {
-    const n = await bulkCreateCards(BLIND75_SEED.map((c) => ({ deckName: c.deck, front: c.front, back: c.back, tags: c.tags })));
-    setToast(`Seeded ${n} Blind 75 cards`);
+    const existing = new Set(allCards.map((c) => c.front));
+    const toCreate = BLIND75_SEED.filter((c) => !existing.has(c.front)).map((c) => ({ deckName: c.deck, front: c.front, back: c.back, tags: c.tags }));
+    if (toCreate.length === 0) {
+      setToast("Blind 75 already seeded");
+      return;
+    }
+    const n = await bulkCreateCards(toCreate);
+    setToast(`Seeded ${n} Blind 75 cards — now ${totalCards + n} total`);
     await refresh();
     await refreshQueue();
   }
@@ -499,6 +506,7 @@ export default function App() {
                 <button className="btn" onClick={handleExport}>Export CSV</button>
                 <button className="btn" onClick={() => fileInputRef.current?.click()}>Import CSV</button>
                 {isTauriEnv && <button className="btn" onClick={toggleWidget}>◫ Widget</button>}
+                {!hasBlind75 && <button className="btn primary" onClick={handleSeedBlind75} style={{ background: "#0ea5e9", borderColor: "#0ea5e9" }}>Seed Blind 75</button>}
                 <input ref={fileInputRef} type="file" accept=".csv,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = ""; }} />
                 <button className="btn primary" onClick={() => { refreshQueue(); setView("review"); }} disabled={dueQueue.length === 0}>
                   Start Review →
@@ -528,6 +536,17 @@ export default function App() {
                 <div className="kpi-sub">Front / Back + tags</div>
               </div>
             </div>
+
+            {!hasBlind75 && totalCards > 0 && (
+              <div className="empty" style={{ borderColor: "#0ea5e9", background: "#f0f9ff", marginBottom: 14 }}>
+                <h3>Blind 75 not yet seeded</h3>
+                <p>You have {totalCards} cards (13 starter). Add the full LeetCode Blind 75 (75) from <a href="https://leetcode.com/problem-list/oizxjoit/" className="md-link" target="_blank" rel="noreferrer">oizxjoit</a> to get to 88 total. URLs will be clickable to open & code on LeetCode.</p>
+                <div className="empty-actions">
+                  <button className="btn primary" onClick={handleSeedBlind75} style={{ background: "#0ea5e9", borderColor: "#0ea5e9" }}>Seed Blind 75 (75) → {Math.min(88, totalCards + 75)} total</button>
+                  <button className="btn" onClick={() => fileInputRef.current?.click()}>Or Import blind75.csv</button>
+                </div>
+              </div>
+            )}
 
             <div className="decks-grid">
               {stats.map((s) => (
