@@ -57,6 +57,8 @@ export default function App() {
   const [newDeckName, setNewDeckName] = useState("");
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentCard = dueQueue[reviewIdx] ?? null;
@@ -83,13 +85,19 @@ export default function App() {
         await initDb();
         await refresh();
         await refreshQueue();
-        // Detect Tauri env and load autostart state
+        // Detect Tauri env and load autostart + check for updates
         const tauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
         setIsTauriEnv(tauri);
         if (tauri) {
           try {
             const { isEnabled } = await import("@tauri-apps/plugin-autostart");
             setAutostartEnabled(await isEnabled());
+          } catch {}
+          // Auto-check for update on launch (silently)
+          try {
+            const { check } = await import("@tauri-apps/plugin-updater");
+            const update = await check();
+            if (update) setUpdateAvailable(update.version);
           } catch {}
         }
       } catch (e) {
@@ -292,6 +300,46 @@ export default function App() {
     }
   }
 
+  async function checkForUpdateManual() {
+    if (!isTauriEnv) {
+      setToast("Updater only in desktop app");
+      return;
+    }
+    setCheckingUpdate(true);
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update) {
+        setUpdateAvailable(update.version);
+        setToast(`Update ${update.version} found`);
+      } else {
+        setToast("Already on latest version");
+      }
+    } catch (e) {
+      setToast(`Update check failed: ${String(e).slice(0, 120)}`);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
+
+  async function installUpdate() {
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      setToast("Downloading update…");
+      const update = await check();
+      if (!update) {
+        setToast("No update available");
+        return;
+      }
+      await update.downloadAndInstall();
+      setToast("Restarting to install…");
+      await relaunch();
+    } catch (e) {
+      setToast(String(e));
+    }
+  }
+
   if (loading) {
     return (
       <div className="loading">
@@ -367,14 +415,23 @@ export default function App() {
             <strong>prep.db</strong>
           </div>
           {isTauriEnv ? (
-            <label className="foot-toggle">
-              <input type="checkbox" checked={autostartEnabled} onChange={toggleAutostart} />
-              <span>Launch at login</span>
-            </label>
+            <>
+              <label className="foot-toggle">
+                <input type="checkbox" checked={autostartEnabled} onChange={toggleAutostart} />
+                <span>Launch at login</span>
+              </label>
+              <div className="foot-update">
+                {updateAvailable ? (
+                  <button className="btn small primary full" onClick={installUpdate}>Update to {updateAvailable} →</button>
+                ) : (
+                  <button className="btn small full" onClick={checkForUpdateManual} disabled={checkingUpdate}>{checkingUpdate ? "Checking…" : "Check for updates"}</button>
+                )}
+              </div>
+            </>
           ) : (
-            <div className="foot-hint">Browser preview — no autostart</div>
+            <div className="foot-hint">Browser preview — no auto-update</div>
           )}
-          <div className="foot-hint">Close → minimizes to tray<br />SQLite • portable<br />Space: reveal • 1/2/3: grade</div>
+          <div className="foot-hint">Close → minimizes to tray<br />{isTauriEnv ? "Auto-updates via GitHub Releases" : "SQLite • localStorage"} • portable<br />Space: reveal • 1/2/3: grade</div>
         </div>
       </aside>
 

@@ -61,6 +61,29 @@ revision/
   public/
 ```
 
+### Tray & Autostart (no terminal)
+- **Tray:** Closing the window hides to tray (not quit) — left-click tray to show, right-click `Show / Quit`.
+- **Launch at login:** Sidebar foot toggle `Launch at login` uses `tauri-plugin-autostart` (macOS LaunchAgent).
+
+### Auto-Update
+Two modes:
+1. **Local rebuild → auto-install to /Applications (for you as dev):**
+   ```bash
+   npm run tauri:build:install   # builds then copies .app to /Applications and relaunches (tray refreshes)
+   # or manually: ./scripts/install-to-applications.sh
+   ```
+   Script quits running app, `cp -R` new bundle, clears quarantine, `open`s it — tray icon/menu update on next launch.
+
+2. **Remote auto-update when new GitHub Release is available (for installed app):**
+   - App checks on launch via `tauri-plugin-updater` — sidebar foot shows `Check for updates` / `Update to vX →` if found.
+   - Configure real repo in `src-tauri/tauri.conf.json:plugins.updater.endpoints`:
+     ```json
+     "endpoints": ["https://github.com/YOUR_USER/YOUR_REPO/releases/latest/download/latest.json"]
+     ```
+     Current placeholder is `REPLACE_ME/REPLACE_ME` — replace with your GitHub repo, then push with `tauri-action` to generate `latest.json` + signed updater artifacts (`createUpdaterArtifacts: v1Compatible` already enabled).
+   - Private key at `src-tauri/keys/updater-key` (ignored), public key already in `tauri.conf.json:pubkey`. For CI, set `TAURI_SIGNING_PRIVATE_KEY` env.
+   - Manual check: sidebar `Check for updates` → `Update to vX →` → downloads, installs, `relaunch` (tray refreshes).
+
 ### Tauri Setup
 Requires Rust 1.70+ and system deps (Xcode CLI tools on macOS). No extra config — `tauri-plugin-sql` with `sqlite` feature already added.
 

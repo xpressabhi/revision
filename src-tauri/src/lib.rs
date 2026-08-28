@@ -19,6 +19,8 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // System tray: Show / Quit / Toggle Autostart
             let show_i = MenuItem::with_id(app, "show", "Show Principal Prep", true, None::<&str>)?;
