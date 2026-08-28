@@ -17,7 +17,7 @@ import {
 } from "./lib/db";
 import { nextState } from "./lib/srs";
 import type { CardWithState, Deck, DeckStats, Grade } from "./lib/types";
-import { MarkdownView } from "./lib/markdown";
+import { MarkdownView, extractUrls } from "./lib/markdown";
 import { parseCsv, toCsv } from "./lib/csv";
 import { SEED_CARDS, BLIND75_SEED } from "./lib/seed";
 import { invoke } from "@tauri-apps/api/core";
@@ -380,6 +380,17 @@ export default function App() {
     invoke("toggle_widget").catch((e) => setToast(String(e)));
   }
 
+  function openExternal(url: string) {
+    const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+    if (isTauri) {
+      import("@tauri-apps/plugin-opener")
+        .then(({ openUrl }) => openUrl(url))
+        .catch(() => window.open(url, "_blank", "noopener,noreferrer"));
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
+
   if (loading) {
     return (
       <div className="loading">
@@ -591,6 +602,13 @@ export default function App() {
                     <div className="card-front">
                       <MarkdownView text={currentCard.front} />
                     </div>
+                    {extractUrls(currentCard.front).length > 0 && (
+                      <div className="card-links">
+                        {extractUrls(currentCard.front).map((u) => (
+                          <button key={u} className="btn small" onClick={() => openExternal(u)}>↗ Open {(() => { try { return new URL(u).hostname.replace("www.", ""); } catch { return "Link"; } })()}</button>
+                        ))}
+                      </div>
+                    )}
                     {!showAnswer ? (
                       <button className="btn primary large full" onClick={() => setShowAnswer(true)}>
                         Show Answer <span className="kbd">Space</span>
@@ -602,6 +620,13 @@ export default function App() {
                         <div className="card-back">
                           <MarkdownView text={currentCard.back} />
                         </div>
+                        {extractUrls(currentCard.back).length > 0 && (
+                          <div className="card-links" style={{ marginTop: 10 }}>
+                            {extractUrls(currentCard.back).map((u) => (
+                              <button key={u} className="btn small primary" onClick={() => openExternal(u)}>↗ Open & Try on {(() => { try { return new URL(u).hostname.replace("www.", ""); } catch { return "Link"; } })()}</button>
+                            ))}
+                          </div>
+                        )}
                         <div className="grade-row">
                           <button className="grade again" onClick={() => grade(1)}>
                             <strong>Again</strong>
@@ -671,24 +696,28 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredBrowse.map((c) => (
-                    <tr key={c.id}>
-                      <td>
-                        <span className="tag deck" style={{ borderColor: deckColor(c.deck_name ?? "") }}>
-                          <span className="dot small" style={{ background: deckColor(c.deck_name ?? "") }} />
-                          {c.deck_name}
-                        </span>
-                      </td>
-                      <td className="front-cell" title={c.front}>{truncate(c.front, 84)}</td>
-                      <td><span className="muted small">{c.tags || "—"}</span></td>
-                      <td><span className={`pill state ${c.state}`}>{c.state}</span></td>
-                      <td className="muted small">{c.state === "new" ? "new" : dueLabel(c.due_at)}</td>
-                      <td className="row-actions">
-                        <button className="mini" onClick={() => openEdit(c)}>Edit</button>
-                        <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredBrowse.map((c) => {
+                    const urls = extractUrls(c.front + " " + c.back);
+                    return (
+                      <tr key={c.id}>
+                        <td>
+                          <span className="tag deck" style={{ borderColor: deckColor(c.deck_name ?? "") }}>
+                            <span className="dot small" style={{ background: deckColor(c.deck_name ?? "") }} />
+                            {c.deck_name}
+                          </span>
+                        </td>
+                        <td className="front-cell" title={c.front}>{truncate(c.front, 84)}{urls.length > 0 && <span title={urls[0]}> 🔗</span>}</td>
+                        <td><span className="muted small">{c.tags || "—"}</span></td>
+                        <td><span className={`pill state ${c.state}`}>{c.state}</span></td>
+                        <td className="muted small">{c.state === "new" ? "new" : dueLabel(c.due_at)}</td>
+                        <td className="row-actions">
+                          {urls.length > 0 && <button className="mini" onClick={() => openExternal(urls[0])} title={urls[0]}>↗</button>}
+                          <button className="mini" onClick={() => openEdit(c)}>Edit</button>
+                          <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {filteredBrowse.length === 0 && <div className="table-empty">No cards match filters.</div>}

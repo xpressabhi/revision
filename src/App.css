@@ -201,6 +201,10 @@ a { color: inherit; }
 .link { background: transparent; border: none; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .link.danger { color: #dc2626; }
 .link:hover { color: var(--text); }
+.card-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.card-links .btn { font-size: 11px; padding: 6px 10px; }
+.md-link { color: #0ea5e9; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+.md-link:hover { color: #0284c7; }
 
 /* Toolbar & table */
 .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
