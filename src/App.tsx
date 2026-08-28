@@ -55,6 +55,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<CardWithState | null>(null);
+  const [viewingCard, setViewingCard] = useState<CardWithState | null>(null);
   const [form, setForm] = useState({ deckId: 0, front: "", back: "", tags: "" });
   const [showDeckMgr, setShowDeckMgr] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
@@ -390,6 +391,17 @@ export default function App() {
 
   return (
     <div className="app">
+      <div className="mobile-topbar">
+        <div className="brand">
+          <div className="brand-mark">◈</div>
+          <div className="brand-title">Revision</div>
+        </div>
+        <div className="mobile-nav">
+          <button className={view === "today" ? "active" : ""} onClick={() => setView("today")}>Today</button>
+          <button className={view === "review" ? "active" : ""} onClick={() => { refreshQueue(); setView("review"); }}>Review</button>
+          <button className={view === "browse" ? "active" : ""} onClick={() => setView("browse")}>Browse</button>
+        </div>
+      </div>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">◈</div>
@@ -707,7 +719,7 @@ export default function App() {
                   {filteredBrowse.map((c) => {
                     const urls = extractUrls(c.front + " " + c.back);
                     return (
-                      <tr key={c.id}>
+                      <tr key={c.id} onClick={() => setViewingCard(c)} style={{ cursor: "pointer" }}>
                         <td>
                           <span className="tag deck" style={{ borderColor: deckColor(c.deck_name ?? "") }}>
                             <span className="dot small" style={{ background: deckColor(c.deck_name ?? "") }} />
@@ -718,7 +730,7 @@ export default function App() {
                         <td><span className="muted small">{c.tags || "—"}</span></td>
                         <td><span className={`pill state ${c.state}`}>{c.state}</span></td>
                         <td className="muted small">{c.state === "new" ? "new" : dueLabel(c.due_at)}</td>
-                        <td className="row-actions">
+                        <td className="row-actions" onClick={(e) => e.stopPropagation()}>
                           {urls.length > 0 && <button className="mini" onClick={() => openExternal(urls[0])} title={urls[0]}>↗</button>}
                           <button className="mini" onClick={() => openEdit(c)}>Edit</button>
                           <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>
@@ -730,6 +742,35 @@ export default function App() {
               </table>
               {filteredBrowse.length === 0 && <div className="table-empty">No cards match filters.</div>}
             </div>
+            <div className="browse-cards">
+              {filteredBrowse.map((c) => {
+                const urls = extractUrls(c.front + " " + c.back);
+                return (
+                  <div key={c.id} className="browse-card" onClick={() => setViewingCard(c)}>
+                    <div className="browse-card-head">
+                      <span className="tag deck" style={{ borderColor: deckColor(c.deck_name ?? "") }}>
+                        <span className="dot small" style={{ background: deckColor(c.deck_name ?? "") }} />
+                        {c.deck_name}
+                      </span>
+                      <span className={`pill state ${c.state}`}>{c.state}</span>
+                      <span className="muted small" style={{ marginLeft: "auto" }}>{c.state === "new" ? "new" : dueLabel(c.due_at)}</span>
+                    </div>
+                    <div className="browse-card-front">{truncate(c.front, 120)}</div>
+                    <div className="browse-card-meta">
+                      <span>{c.tags || "—"}</span>
+                      {urls.length > 0 && <span>🔗 {urls.length}</span>}
+                    </div>
+                    <div className="browse-card-actions" onClick={(e) => e.stopPropagation()}>
+                      {urls.length > 0 && <button className="mini" onClick={() => openExternal(urls[0])}>↗ Open</button>}
+                      <button className="mini" onClick={() => openEdit(c)}>Edit</button>
+                      <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>
+                      <button className="mini" onClick={() => setViewingCard(c)}>View</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {filteredBrowse.length === 0 && <div className="table-empty browse-cards-empty" style={{ display: "none" }}>No cards match filters.</div>}
           </div>
         )}
       </main>
@@ -771,6 +812,48 @@ export default function App() {
             <div className="modal-foot">
               <button className="btn" onClick={() => { setShowAdd(false); setEditing(null); }}>Cancel</button>
               <button className="btn primary" onClick={handleAddOrUpdate}>{editing ? "Save Changes" : "Add Card"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingCard && (
+        <div className="modal-backdrop" onClick={() => setViewingCard(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <div className="modal-head">
+              <h2>View Card</h2>
+              <button className="icon-btn" onClick={() => setViewingCard(null)}>×</button>
+            </div>
+            <div className="form">
+              <div>
+                <div className="form-preview-label">Deck • {viewingCard.deck_name} • {viewingCard.state} • {viewingCard.tags || "no tags"}</div>
+                <div className="card" style={{ padding: 16 }}>
+                  <div className="card-label">Front</div>
+                  <div className="card-front"><MarkdownView text={viewingCard.front} /></div>
+                  {extractUrls(viewingCard.front).length > 0 && (
+                    <div className="card-links">
+                      {extractUrls(viewingCard.front).map((u) => (
+                        <button key={u} className="btn small" onClick={() => openExternal(u)}>↗ Open</button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="divider" />
+                  <div className="card-label">Back</div>
+                  <div className="card-back"><MarkdownView text={viewingCard.back} /></div>
+                  {extractUrls(viewingCard.back).length > 0 && (
+                    <div className="card-links" style={{ marginTop: 10 }}>
+                      {extractUrls(viewingCard.back).map((u) => (
+                        <button key={u} className="btn small primary" onClick={() => openExternal(u)}>↗ Open & Try</button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="muted small" style={{ marginTop: 10 }}>Tags: {viewingCard.tags || "—"}</div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setViewingCard(null)}>Close</button>
+              <button className="btn primary" onClick={() => { const c = viewingCard; setViewingCard(null); if (c) openEdit(c); }}>Edit</button>
             </div>
           </div>
         </div>
