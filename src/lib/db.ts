@@ -29,7 +29,7 @@ async function getDb() {
   // Lazy import so browser bundle doesn't fail if plugin missing
   const mod = await import("@tauri-apps/plugin-sql");
   const Database = mod.default;
-  dbInstance = await Database.load("sqlite:prep.db");
+  dbInstance = await Database.load("sqlite:revision.db");
   return dbInstance;
 }
 

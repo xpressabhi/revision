@@ -23,7 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // System tray: Show / Quit / Toggle Autostart
-            let show_i = MenuItem::with_id(app, "show", "Show Principal Prep", true, None::<&str>)?;
+            let show_i = MenuItem::with_id(app, "show", "Show Revision", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 

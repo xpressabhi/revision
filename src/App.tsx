@@ -344,7 +344,7 @@ export default function App() {
     return (
       <div className="loading">
         <div className="spinner" />
-        <p>Opening prep.db…</p>
+        <p>Opening revision.db…</p>
       </div>
     );
   }
@@ -355,7 +355,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark">◈</div>
           <div>
-            <div className="brand-title">Principal Prep</div>
+            <div className="brand-title">Revision</div>
             <div className="brand-sub">Local • SQLite • Spaced</div>
           </div>
         </div>
@@ -412,7 +412,7 @@ export default function App() {
         <div className="sidebar-foot">
           <div className="foot-stat">
             <span>DB</span>
-            <strong>prep.db</strong>
+            <strong>revision.db</strong>
           </div>
           {isTauriEnv ? (
             <>

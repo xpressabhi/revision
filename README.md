@@ -1,8 +1,8 @@
-# Principal Prep — Active Recall (Tauri + SQLite)
+# Revision — Active Recall (Tauri + SQLite)
 
 Local-first desktop app for principal-level interview prep. Spaced repetition for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral**.
 
-> Works fully offline. Single SQLite file `prep.db` (Tauri) or `localStorage` (browser preview). No cloud, no account.
+> Works fully offline. Single SQLite file `revision.db` (Tauri) or `localStorage` (browser preview). No cloud, no account.
 
 ### Features
 - 6 pre-seeded decks, generic Front/Back cards with markdown + code blocks + tags
@@ -11,7 +11,7 @@ Local-first desktop app for principal-level interview prep. Spaced repetition fo
 - Browse: search front/back/tags, filter by deck/state, edit/delete
 - Import/Export CSV: `deck,front,back,tags` — drag or button
 - Seed 13 starter cards covering all pillars
-- SQLite: `prep.db` in app data dir (Tauri) via `tauri-plugin-sql`, WAL + FK enabled
+- SQLite: `revision.db` in app data dir (Tauri) via `tauri-plugin-sql`, WAL + FK enabled
 
 ### Stack
 - **Tauri 2** + **React 19** + **TypeScript** + **Vite 7**
@@ -23,7 +23,7 @@ Local-first desktop app for principal-level interview prep. Spaced repetition fo
 ```bash
 npm install
 # Desktop (Tauri) — recommended
-npm run tauri dev        # opens native window, uses SQLite prep.db
+npm run tauri dev        # opens native window, uses SQLite revision.db
 
 # Or preview in browser only (uses localStorage, no Rust needed)
 npm run dev              # http://localhost:1420 — good for UI iteration
@@ -34,7 +34,7 @@ npm run build            # web build only -> dist/
 ```
 
 ### DB Location
-- Tauri: app data dir — e.g. `~/Library/Application Support/com.principal.prep/prep.db` (macOS). Portable: `Export CSV` to backup.
+- Tauri: app data dir — e.g. `~/Library/Application Support/com.revision.app/revision.db` (macOS). Portable: `Export CSV` to backup.
 - Browser: `localStorage` keys `prep_cards`, `prep_states`, etc. Clear site data to reset.
 
 ### CSV Format

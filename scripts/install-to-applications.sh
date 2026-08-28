@@ -3,7 +3,7 @@ set -euo pipefail
 # Installs the freshly built .app to /Applications and refreshes tray
 # Usage: npm run tauri:build:install  (builds then calls this) or ./scripts/install-to-applications.sh directly
 
-APP_NAME="Principal Prep.app"
+APP_NAME="Revision.app"
 SRC="src-tauri/target/release/bundle/macos/${APP_NAME}"
 DEST="/Applications/${APP_NAME}"
 
@@ -22,11 +22,11 @@ fi
 echo "→ Installing ${SRC} → ${DEST}"
 
 # Quit running instance if any (so tray refreshes)
-if pgrep -f "Principal Prep" >/dev/null 2>&1; then
-  echo "→ Quitting running Principal Prep..."
-  osascript -e 'tell application "Principal Prep" to quit' 2>/dev/null || true
+if pgrep -f "Revision" >/dev/null 2>&1; then
+  echo "→ Quitting running Revision..."
+  osascript -e 'tell application "Revision" to quit' 2>/dev/null || true
   # Also kill via pkill as fallback
-  pkill -f "Principal Prep" 2>/dev/null || true
+  pkill -f "Revision" 2>/dev/null || true
   sleep 1.5
 fi
 

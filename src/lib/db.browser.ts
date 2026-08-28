@@ -4,11 +4,11 @@
 import type { CardState, CardWithState, Deck, DeckStats } from "./types";
 import { DEFAULT_EASE } from "./srs";
 
-const LS_DECKS = "prep_decks";
-const LS_CARDS = "prep_cards";
-const LS_STATES = "prep_states";
-const LS_REVIEWS = "prep_reviews";
-const LS_SEQ = "prep_seq";
+const LS_DECKS = "revision_decks";
+const LS_CARDS = "revision_cards";
+const LS_STATES = "revision_states";
+const LS_REVIEWS = "revision_reviews";
+const LS_SEQ = "revision_seq";
 
 type ReviewRow = { id: number; card_id: number; grade: number; created_at: string };
 
