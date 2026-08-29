@@ -23,7 +23,7 @@ import { SEED_CARDS, BLIND75_SEED } from "./lib/seed";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
-type View = "today" | "review" | "browse";
+type View = "today" | "review" | "browse" | "settings";
 
 const DECK_COLORS: Record<string, string> = {
   "DSA / LeetCode": "#0ea5e9",
@@ -67,6 +67,13 @@ export default function App() {
   const [form, setForm] = useState({ deckId: 0, front: "", back: "", tags: "" });
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
+  const [showDestructive, setShowDestructive] = useState(() => {
+    try {
+      return localStorage.getItem("revision_showDestructive") === "true";
+    } catch {
+      return false;
+    }
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentCard = dueQueue[reviewIdx] ?? null;
@@ -116,6 +123,12 @@ export default function App() {
     const t = setTimeout(() => setToast(null), 2500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("revision_showDestructive", String(showDestructive));
+    } catch {}
+  }, [showDestructive]);
 
   const dueTotal = stats.reduce((a, s) => a + s.due, 0);
   const newTotal = stats.reduce((a, s) => a + s.newCount, 0);
@@ -385,6 +398,27 @@ export default function App() {
     }
   }
 
+  async function gradeViewing(grade: Grade) {
+    if (!viewingCard) return;
+    const now = new Date();
+    const state = {
+      card_id: viewingCard.id,
+      due_at: viewingCard.due_at,
+      interval: viewingCard.interval,
+      ease: viewingCard.ease,
+      reps: viewingCard.reps,
+      state: viewingCard.state as CardWithState["state"],
+      updated_at: now.toISOString(),
+    };
+    const next = nextState(state, grade, now);
+    await updateCardState(next);
+    await logReview(viewingCard.id, grade);
+    setToast(grade === 1 ? "Scheduled for 10m" : grade === 3 ? "Good — next review tomorrow" : "Easy — in 3 days");
+    setViewingCard(null);
+    await refresh();
+    await refreshQueue();
+  }
+
   if (loading) {
     return (
       <div className="loading">
@@ -405,6 +439,7 @@ export default function App() {
           <button className={view === "today" ? "active" : ""} onClick={() => setView("today")}>Today</button>
           <button className={view === "review" ? "active" : ""} onClick={() => { refreshQueue(); setView("review"); }}>Review</button>
           <button className={view === "browse" ? "active" : ""} onClick={() => setView("browse")}>Browse</button>
+          <button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}>Settings</button>
         </div>
       </div>
       <aside className="sidebar">
@@ -428,6 +463,9 @@ export default function App() {
           <button className={view === "browse" ? "active" : ""} onClick={() => setView("browse")}>
             <span className="nav-ico">▦</span> Browse
             <span className="nav-badge muted">{totalCards}</span>
+          </button>
+          <button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}>
+            <span className="nav-ico">⚙</span> Settings
           </button>
         </nav>
 
@@ -529,10 +567,14 @@ export default function App() {
                 <span className="empty-icon">⚠</span>
                 <h3>{duplicateCount} duplicates — Blind 75 imported multiple times</h3>
                 <p>Same front detected in same deck. Deduplicate keeps one per question, or Reset to clear and re-seed cleanly.</p>
-                <div className="empty-actions">
-                  <button className="btn primary" onClick={handleDeduplicate} style={{ background: "#f59e0b", borderColor: "#f59e0b" }}>Deduplicate — remove {duplicateCount}</button>
-                  <button className="btn" onClick={handleResetDb}>Reset Everything</button>
-                </div>
+                {showDestructive ? (
+                  <div className="empty-actions">
+                    <button className="btn primary" onClick={handleDeduplicate} style={{ background: "#f59e0b", borderColor: "#f59e0b" }}>Deduplicate — remove {duplicateCount}</button>
+                    <button className="btn" onClick={handleResetDb}>Reset Everything</button>
+                  </div>
+                ) : (
+                  <div className="muted small" style={{ marginTop: 8 }}>Destructive actions are hidden — enable in <button className="link" onClick={() => setView("settings")}>Settings</button>.</div>
+                )}
               </div>
             )}
 
@@ -711,8 +753,14 @@ export default function App() {
               </select>
               <span className="muted small">{filteredBrowse.length} cards</span>
               <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-                {duplicateCount > 0 && <button className="btn small" onClick={handleDeduplicate} style={{ background: "#fffbeb", borderColor: "#fde68a" }}>Deduplicate ({duplicateCount})</button>}
-                <button className="btn small" onClick={handleResetDb} style={{ color: "#b91c1c", borderColor: "#fecaca", background: "#fef2f2" }}>Reset DB</button>
+                {showDestructive ? (
+                  <>
+                    {duplicateCount > 0 && <button className="btn small" onClick={handleDeduplicate} style={{ background: "#fffbeb", borderColor: "#fde68a" }}>Deduplicate ({duplicateCount})</button>}
+                    <button className="btn small" onClick={handleResetDb} style={{ color: "#b91c1c", borderColor: "#fecaca", background: "#fef2f2" }}>Reset DB</button>
+                  </>
+                ) : (
+                  <button className="btn small" onClick={() => setView("settings")}>Show destructive in Settings</button>
+                )}
               </div>
             </div>
 
@@ -746,7 +794,7 @@ export default function App() {
                         <td className="row-actions" onClick={(e) => e.stopPropagation()}>
                           {urls.length > 0 && <button className="mini" onClick={() => openExternal(urls[0])} title={urls[0]}>↗</button>}
                           <button className="mini" onClick={() => openEdit(c)}>Edit</button>
-                          <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>
+                          {showDestructive && <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>}
                         </td>
                       </tr>
                     );
@@ -776,7 +824,7 @@ export default function App() {
                     <div className="browse-card-actions" onClick={(e) => e.stopPropagation()}>
                       {urls.length > 0 && <button className="mini" onClick={() => openExternal(urls[0])}>↗ Open</button>}
                       <button className="mini" onClick={() => openEdit(c)}>Edit</button>
-                      <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>
+                      {showDestructive && <button className="mini danger" onClick={() => handleDelete(c)}>Delete</button>}
                       <button className="mini" onClick={() => setViewingCard(c)}>View</button>
                     </div>
                   </div>
@@ -784,6 +832,42 @@ export default function App() {
               })}
             </div>
             {filteredBrowse.length === 0 && <div className="table-empty browse-cards-empty" style={{ display: "none" }}>No cards match filters.</div>}
+          </div>
+        )}
+
+        {view === "settings" && (
+          <div className="page">
+            <header className="page-head">
+              <div>
+                <h1>Settings</h1>
+                <p className="muted">Manage appearance and destructive actions.</p>
+              </div>
+            </header>
+            <div className="card" style={{ maxWidth: 560 }}>
+              <div className="form">
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <span>
+                    <strong>Show destructive actions</strong>
+                    <span className="muted small" style={{ display: "block", fontWeight: 400 }}>Reveal Reset DB, Deduplicate, Delete deck/card in Today/Browse. Hidden by default to prevent accidents.</span>
+                  </span>
+                  <input type="checkbox" checked={showDestructive} onChange={(e) => setShowDestructive(e.target.checked)} style={{ width: 18, height: 18 }} />
+                </label>
+                <div className="divider" />
+                <div className="muted small">
+                  <strong>Tips:</strong> Destructive actions are double-confirmed. You can also reset via file: <code>rm ~/Library/Application\ Support/com.revision.app/revision.db*</code> then relaunch.
+                </div>
+                {showDestructive && (
+                  <div className="empty" style={{ background: "#fffbeb", borderColor: "#fde68a", marginTop: 8 }}>
+                    <h3>Destructive actions enabled</h3>
+                    <p className="muted small">They will appear in Today/Browse. Disable the toggle to hide them again.</p>
+                    <div className="empty-actions">
+                      <button className="btn small" onClick={handleDeduplicate} style={{ background: "#fffbeb", borderColor: "#fde68a" }}>Deduplicate {duplicateCount > 0 ? `(${duplicateCount})` : ""}</button>
+                      <button className="btn small" onClick={handleResetDb} style={{ color: "#b91c1c", borderColor: "#fecaca", background: "#fef2f2" }}>Reset DB — delete all</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -857,6 +941,12 @@ export default function App() {
                     </div>
                   )}
                   <div className="muted small" style={{ marginTop: 10 }}>Tags: {viewingCard.tags || "—"}</div>
+                  <div className="muted small" style={{ marginTop: 6 }}>{viewingCard.state} • {Math.round(viewingCard.ease * 10) / 10} ease • due {dueLabel(viewingCard.due_at)}</div>
+                  <div className="grade-row" style={{ marginTop: 12 }}>
+                    <button className="grade again" onClick={() => gradeViewing(1)}><strong>Again</strong><span>10m • forgot</span><span className="kbd">1</span></button>
+                    <button className="grade good" onClick={() => gradeViewing(3)}><strong>Good</strong><span>{viewingCard.state === "new" ? "1d" : `~${Math.max(1, Math.round((viewingCard.interval || 1) * viewingCard.ease))}d`} • correct</span><span className="kbd">2</span></button>
+                    <button className="grade easy" onClick={() => gradeViewing(4)}><strong>Easy</strong><span>{viewingCard.state === "new" ? "3d" : `~${Math.max(1, Math.round((viewingCard.interval || 1) * viewingCard.ease * 1.3))}d`} • easy</span><span className="kbd">3</span></button>
+                  </div>
                 </div>
               </div>
             </div>
