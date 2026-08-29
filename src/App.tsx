@@ -525,6 +525,7 @@ export default function App() {
 
             {!hasBlind75 && totalCards > 0 && (
               <div className="empty" style={{ borderColor: "#0ea5e9", background: "#f0f9ff", marginBottom: 14 }}>
+                <span className="empty-icon">📖</span>
                 <h3>Blind 75 not yet seeded</h3>
                 <p>You have {totalCards} cards (13 starter). Add the full LeetCode Blind 75 (75) from <a href="https://leetcode.com/problem-list/oizxjoit/" className="md-link" target="_blank" rel="noreferrer">oizxjoit</a> to get to 88 total. URLs will be clickable to open & code on LeetCode.</p>
                 <div className="empty-actions">
@@ -536,7 +537,8 @@ export default function App() {
 
             {duplicateCount > 0 && (
               <div className="empty" style={{ borderColor: "#f59e0b", background: "#fffbeb", marginBottom: 14 }}>
-                <h3>⚠ {duplicateCount} duplicates — Blind 75 imported multiple times</h3>
+                <span className="empty-icon">⚠</span>
+                <h3>{duplicateCount} duplicates — Blind 75 imported multiple times</h3>
                 <p>Same front detected in same deck. Deduplicate keeps one per question, or Reset to clear and re-seed cleanly.</p>
                 <div className="empty-actions">
                   <button className="btn primary" onClick={handleDeduplicate} style={{ background: "#f59e0b", borderColor: "#f59e0b" }}>Deduplicate — remove {duplicateCount}</button>
@@ -568,6 +570,7 @@ export default function App() {
 
             {totalCards === 0 && (
               <div className="empty">
+                <span className="empty-icon">📚</span>
                 <h3>No cards yet</h3>
                 <p>Add your first DSA or System Design card, or seed the starter set.</p>
                 <div className="empty-actions">
@@ -583,7 +586,8 @@ export default function App() {
 
             {totalCards > 0 && dueQueue.length === 0 && (
               <div className="empty done">
-                <h3>✓ All caught up</h3>
+                <span className="empty-icon">🎉</span>
+                <h3>All caught up</h3>
                 <p>No cards due. Add new cards or check back later — Again cards reappear in ~10 minutes.</p>
                 <button className="btn" onClick={() => setView("browse")}>Browse cards</button>
               </div>
@@ -595,6 +599,7 @@ export default function App() {
           <div className="page review-page">
             {!currentCard ? (
               <div className="empty done">
+                <span className="empty-icon">✨</span>
                 <h3>Queue empty</h3>
                 <p>Nothing due right now. Great work.</p>
                 <div className="empty-actions">
