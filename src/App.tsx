@@ -76,6 +76,15 @@ export default function App() {
   });
   const [articleUrl, setArticleUrl] = useState("");
   const [isOrganizing, setIsOrganizing] = useState(false);
+  const [zenModels, setZenModels] = useState<string[]>([]);
+  const [zenModelsLoading, setZenModelsLoading] = useState(false);
+  const [selectedZenModel, setSelectedZenModel] = useState(() => {
+    try {
+      return localStorage.getItem("revision_zen_model") || "";
+    } catch {
+      return "";
+    }
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentCard = dueQueue[reviewIdx] ?? null;
@@ -131,6 +140,31 @@ export default function App() {
       localStorage.setItem("revision_showDestructive", String(showDestructive));
     } catch {}
   }, [showDestructive]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("revision_zen_model", selectedZenModel);
+    } catch {}
+  }, [selectedZenModel]);
+
+  useEffect(() => {
+    (async () => {
+      setZenModelsLoading(true);
+      try {
+        const { fetchFreeModels, getSelectedZenModel } = await import("./lib/article");
+        const models = await fetchFreeModels();
+        setZenModels(models);
+        const current = getSelectedZenModel() || selectedZenModel;
+        if (!current && models.length > 0) {
+          const first = models[0];
+          setSelectedZenModel(first);
+        } else if (current && !models.includes(current) && models.length > 0) {
+          // If stored model is no longer free, keep it but warn
+        }
+      } catch {}
+      setZenModelsLoading(false);
+    })();
+  }, []);
 
   const dueTotal = stats.reduce((a, s) => a + s.due, 0);
   const newTotal = stats.reduce((a, s) => a + s.newCount, 0);
@@ -295,9 +329,20 @@ export default function App() {
         back: organized.back,
         tags: organized.tags,
       }));
-      setToast("Organized via Zen • edit then Add");
+      // Detect heuristic fallback (Zen failed for all free models)
+      const isHeuristic = organized.back.includes("fetch blocked") || organized.front.includes("What’s the key takeaway?") && organized.back.includes("Takeaways:\n- \n-");
+      if (isHeuristic) {
+        setToast("Zen failed for selected model — used heuristic. Switch model in Settings → Zen Model and retry.");
+      } else {
+        setToast("Organized via Zen • edit then Add");
+      }
     } catch (e) {
-      setToast(String(e).slice(0, 120));
+      const msg = String(e);
+      if (msg.includes("All free Zen models failed")) {
+        setToast("All free Zen models failed — switch model in Settings → Zen Model");
+      } else {
+        setToast(msg.slice(0, 160));
+      }
     } finally {
       setIsOrganizing(false);
     }
@@ -894,6 +939,36 @@ export default function App() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+            <div className="card" style={{ maxWidth: 560, marginTop: 16 }}>
+              <div className="form">
+                <label>
+                  Zen Model (free) <span className="muted">https://opencode.ai/zen/v1 • tries in order, first selected first</span>
+                  <select
+                    value={selectedZenModel}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSelectedZenModel(v);
+                      try { localStorage.setItem("revision_zen_model", v); } catch {}
+                    }}
+                    disabled={zenModelsLoading || zenModels.length === 0}
+                  >
+                    {zenModelsLoading ? (
+                      <option>Loading free models…</option>
+                    ) : zenModels.length === 0 ? (
+                      <option value="">No free models found</option>
+                    ) : (
+                      zenModels.map((m) => <option key={m} value={m}>{m}</option>)
+                    )}
+                  </select>
+                  <span className="muted small">
+                    Endpoint: <code>https://opencode.ai/zen/v1</code> • {zenModels.length} free models (filtered “free” in id). Selected is tried first, then the rest one by one. If all fail, heuristic is used and a toast tells you to switch model.
+                  </span>
+                </label>
+                <div className="muted small">
+                  Current: <code>{selectedZenModel || "(auto first)"}</code> • Try <code>✨ Auto-organize</code> in Add Card — if it falls back to heuristic, switch model here and retry.
+                </div>
               </div>
             </div>
           </div>

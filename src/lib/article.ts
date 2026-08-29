@@ -3,6 +3,51 @@
 
 export type Organized = { front: string; back: string; tags: string };
 
+let cachedFreeModels: string[] | null = null;
+
+export async function fetchFreeModels(): Promise<string[]> {
+  if (cachedFreeModels) return cachedFreeModels;
+  try {
+    const r = await fetch("https://opencode.ai/zen/v1/models");
+    if (!r.ok) throw new Error(`models ${r.status}`);
+    const j: any = await r.json();
+    const data: any[] = j.data || j.models || [];
+    const ids: string[] = data.map((m: any) => m.id as string).filter((id: string) => id.includes("free"));
+    if (ids.length === 0) throw new Error("no free models");
+    // Keep original order from API (already sorted), first is default
+    cachedFreeModels = ids;
+    return ids;
+  } catch (e) {
+    // Fallback hardcoded free list (known to work, from /models)
+    const fallback = [
+      "nemotron-3.5-lightning-free",
+      "mimo-v2.5-free",
+      "deepseek-v4-flash-free",
+      "muse-spark-1.2-contributor-free",
+      "hy3-free",
+      "ling-3.0-flash-fin-free",
+      "laguna-s-2.1-free",
+      "nemotron-3-ultra-free",
+    ];
+    cachedFreeModels = fallback;
+    return fallback;
+  }
+}
+
+export function getSelectedZenModel(): string {
+  try {
+    const m = localStorage.getItem("revision_zen_model");
+    if (m) return m;
+  } catch {}
+  return "";
+}
+
+export function setSelectedZenModel(model: string) {
+  try {
+    localStorage.setItem("revision_zen_model", model);
+  } catch {}
+}
+
 // Fetch article HTML and extract title + text (no heavy deps, simple readability)
 export async function fetchArticle(url: string): Promise<{ title: string; text: string; markdown: string }> {
   const u = url.trim();
@@ -19,15 +64,61 @@ export async function fetchArticle(url: string): Promise<{ title: string; text: 
   try {
     html = await tryFetch(u);
   } catch (e) {
-    // CORS fallback: allorigins (free, no key)
-    try {
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
-      const r = await fetch(proxy);
-      if (!r.ok) throw e;
-      const j = await r.json();
-      html = j.contents as string;
-    } catch {
-      throw e;
+    // CORS fallbacks: try allorigins (json + raw), corsproxy, and firecrawl if key available
+    const fallbacks: (() => Promise<string>)[] = [
+      async () => {
+        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
+        const r = await fetch(proxy);
+        if (!r.ok) throw new Error("allorigins/get failed");
+        const j: any = await r.json();
+        if (!j.contents) throw new Error("allorigins empty");
+        return j.contents as string;
+      },
+      async () => {
+        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
+        const r = await fetch(proxy);
+        if (!r.ok) throw new Error("allorigins/raw failed");
+        return r.text();
+      },
+      async () => {
+        const proxy = `https://corsproxy.io/?${encodeURIComponent(u)}`;
+        const r = await fetch(proxy);
+        if (!r.ok) throw new Error("corsproxy failed");
+        const t = await r.text();
+        if (!t || t.length < 500) throw new Error("corsproxy empty");
+        return t;
+      },
+      async () => {
+        // Firecrawl if key in localStorage (best for Medium paywall + JS)
+        const key = (() => {
+          try { return localStorage.getItem("revision_firecrawl_key") || ""; } catch { return ""; }
+        })();
+        if (!key) throw new Error("no firecrawl key");
+        const r = await fetch("https://api.firecrawl.dev/v1/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({ url: u, onlyMainContent: true, waitFor: 5000 }),
+        });
+        if (!r.ok) throw new Error("firecrawl failed");
+        const j: any = await r.json();
+        return (j.data?.markdown || j.data?.html || j.markdown || "") as string;
+      },
+    ];
+    let lastErr = e;
+    for (const fn of fallbacks) {
+      try {
+        html = await fn();
+        if (html && html.length > 500) break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (!html) {
+      // Final fallback: return minimal stub for Zen to still try (e.g., Medium behind Cloudflare without Firecrawl key)
+      // Use URL as title and placeholder text so organizeArticle can still create a card via heuristic/Zen
+      const fallbackTitle = u.split("/").pop()?.replace(/-/g, " ").replace(/\?.*/, "") || u;
+      console.warn("All article fetches failed, using fallback stub for", u, lastErr);
+      return { title: fallbackTitle.slice(0, 120) || u, text: `Article at ${u} — fetch blocked (Cloudflare). Use Firecrawl API key in Settings for full extract.`, markdown: `# ${fallbackTitle}\n\nArticle at ${u}` };
     }
   }
 
@@ -77,35 +168,51 @@ function heuristicOrganize(url: string, title: string, text: string): Organized 
 }
 
 async function callZen(prompt: string): Promise<string | null> {
-  // 1) Local opencode zen (free, no key, if `opencode zen` running)
+  // 1) Primary: opencode.ai/zen/v1 — try all free models in order, selected first
   try {
+    const freeList = await fetchFreeModels();
+    const selected = getSelectedZenModel();
+    const ordered = selected && freeList.includes(selected)
+      ? [selected, ...freeList.filter((m) => m !== selected)]
+      : freeList;
+    for (const model of ordered) {
+      try {
+        const r = await fetch("https://opencode.ai/zen/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.2,
+            max_tokens: 1200,
+          }),
+        });
+        if (r.ok) {
+          const j: any = await r.json();
+          const c = j.choices?.[0]?.message?.content ?? j.choices?.[0]?.text;
+          if (c && c.trim()) return c as string;
+        } else {
+          // If 403/429, try next model
+          const txt = await r.text().catch(() => "");
+          if (r.status === 429 || r.status === 403 || txt.includes("FreeUsageLimit") || txt.includes("Rate limit") || txt.includes("unavailable")) {
+            continue;
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // 2) Fallback: try local zen if user runs `opencode zen`
+  try {
+    const localModel = getSelectedZenModel() || "muse-spark-free";
     const r = await fetch("http://localhost:4096/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "zen-mini",
+        model: localModel,
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        max_tokens: 600,
-      }),
-    });
-    if (r.ok) {
-      const j: any = await r.json();
-      const c = j.choices?.[0]?.message?.content;
-      if (c) return c as string;
-    }
-  } catch {}
-
-  // 2) Cloud free opencode zen (no key, rate-limited)
-  try {
-    const r = await fetch("https://api.opencode.ai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "zen-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        max_tokens: 600,
+        temperature: 0.2,
+        max_tokens: 1200,
       }),
     });
     if (r.ok) {
@@ -119,7 +226,7 @@ async function callZen(prompt: string): Promise<string | null> {
   try {
     const endpoint = localStorage.getItem("revision_zen_endpoint");
     const key = localStorage.getItem("revision_zen_key");
-    const model = localStorage.getItem("revision_zen_model") || "zen-mini";
+    const model = localStorage.getItem("revision_zen_model") || "nemotron-3.5-lightning-free";
     if (endpoint) {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (key) headers["Authorization"] = `Bearer ${key}`;
@@ -129,8 +236,8 @@ async function callZen(prompt: string): Promise<string | null> {
         body: JSON.stringify({
           model,
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.3,
-          max_tokens: 600,
+          temperature: 0.2,
+          max_tokens: 1200,
         }),
       });
       if (r.ok) {
@@ -174,15 +281,30 @@ Output JSON example: {"front":"RAG — when to use hybrid search?","back":"**Lin
           if (!back.includes(url)) {
             back = `**Link:** ${url}\n\n${back}`;
           }
-          // Ensure tags includes article
-          let tags = String(j.tags).toLowerCase();
+          // Ensure tags includes article — handle both string and array
+          const tagsRaw = Array.isArray(j.tags) ? (j.tags as string[]).join(", ") : String(j.tags);
+          let tags = tagsRaw.toLowerCase();
           if (!tags.includes("article")) tags = `article, ${tags}`;
-          return { front: String(j.front).slice(0, 120), back: back.slice(0, 800), tags: tags.slice(0, 120) };
+          // Normalize tags to our pillar format
+          tags = tags.replace(/\s+/g, " ").replace(/,\s*/g, ", ").trim();
+          return { front: String(j.front).slice(0, 120), back: back.slice(0, 800), tags: tags.slice(0, 150) };
         }
       } catch {}
     }
+    // Zen returned something but not valid JSON — treat as failed and try heuristic, but warn
+    console.warn("Zen returned invalid JSON, falling back to heuristic", raw.slice(0, 300));
   }
 
-  // Fallback heuristic when Zen unavailable or parse failed
+  // Fallback heuristic when Zen unavailable or parse failed — still return heuristic so card can be created
+  // If raw was null (all free models failed), the heuristic will be used but UI can show a warning toast
+  // We attach a console warning for debugging; handleOrganizeArticle will show a toast about switching model
+  if (!raw) {
+    const freeModels = await fetchFreeModels().catch(() => []);
+    if (freeModels.length > 0) {
+      console.warn(`All free Zen models failed (tried ${freeModels.slice(0, 3).join(", ")}...). Using heuristic. Please switch model in Settings → Zen Model.`);
+      // Optionally, we could throw to let UI show error, but we return heuristic so card is still created
+      // The UI will detect heuristic (back contains "fetch blocked" or front is generic) and show a toast
+    }
+  }
   return heuristicOrganize(url, title, text);
 }
