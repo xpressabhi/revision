@@ -74,6 +74,8 @@ export default function App() {
       return false;
     }
   });
+  const [articleUrl, setArticleUrl] = useState("");
+  const [isOrganizing, setIsOrganizing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentCard = dueQueue[reviewIdx] ?? null;
@@ -271,14 +273,40 @@ export default function App() {
     }
     setShowAdd(false);
     setEditing(null);
+    setArticleUrl("");
     setForm({ deckId: singleDeckId || decks[0]?.id || 0, front: "", back: "", tags: "" });
     await refresh();
     await refreshQueue();
   }
 
+  async function handleOrganizeArticle() {
+    const url = articleUrl.trim() || extractUrls(form.back)[0] || extractUrls(form.front)[0] || "";
+    if (!url || !url.startsWith("http")) {
+      setToast("Paste a valid https:// article URL first");
+      return;
+    }
+    setIsOrganizing(true);
+    try {
+      const { organizeArticle } = await import("./lib/article");
+      const organized = await organizeArticle(url);
+      setForm((f) => ({
+        deckId: singleDeckId || f.deckId || decks[0]?.id || 0,
+        front: organized.front,
+        back: organized.back,
+        tags: organized.tags,
+      }));
+      setToast("Organized via Zen • edit then Add");
+    } catch (e) {
+      setToast(String(e).slice(0, 120));
+    } finally {
+      setIsOrganizing(false);
+    }
+  }
+
   function openEdit(c: CardWithState) {
     setEditing(c);
     setForm({ deckId: singleDeckId || c.deck_id, front: c.front, back: c.back, tags: c.tags });
+    setArticleUrl(extractUrls(c.back)[0] || extractUrls(c.front)[0] || "");
     setShowAdd(true);
   }
 
@@ -734,7 +762,7 @@ export default function App() {
                 <h1>Browse</h1>
                 <p className="muted">Search, filter, edit. Front/Back are markdown + code + image paste (stores as data URL).</p>
               </div>
-              <button className="btn primary" onClick={() => { setEditing(null); setForm({ deckId: singleDeckId || decks[0]?.id || 0, front: "", back: "", tags: "" }); setShowAdd(true); }}>＋ Add Card</button>
+              <button className="btn primary" onClick={() => { setEditing(null); setArticleUrl(""); setForm({ deckId: singleDeckId || decks[0]?.id || 0, front: "", back: "", tags: "" }); setShowAdd(true); }}>＋ Add Card</button>
             </header>
 
             <div className="toolbar">
@@ -873,15 +901,25 @@ export default function App() {
       </main>
 
       {showAdd && (
-        <div className="modal-backdrop" onClick={() => { setShowAdd(false); setEditing(null); }}>
+        <div className="modal-backdrop" onClick={() => { setShowAdd(false); setEditing(null); setArticleUrl(""); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>{editing ? "Edit Card" : "Add Card"}</h2>
-              <button className="icon-btn" onClick={() => { setShowAdd(false); setEditing(null); }}>×</button>
+              <button className="icon-btn" onClick={() => { setShowAdd(false); setEditing(null); setArticleUrl(""); }}>×</button>
             </div>
             <div className="form">
               <input type="hidden" value={form.deckId} readOnly />
               <div className="muted small">Single deck “Revision” • add pillar via tags: <code>dsa</code>, <code>sd-concepts</code>, <code>sd-use-cases</code>, <code>ai-concepts</code>, <code>ai-use-cases</code>, <code>behavioral</code></div>
+              <label>
+                Article URL <span className="muted">paste https://… to auto-organize with Zen (free)</span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input value={articleUrl} onChange={(e) => setArticleUrl(e.target.value)} placeholder="https://example.com/article" style={{ flex: 1 }} />
+                  <button className="btn small primary" onClick={handleOrganizeArticle} disabled={isOrganizing || !articleUrl.trim()}>
+                    {isOrganizing ? "Organizing…" : "✨ Auto-organize"}
+                  </button>
+                </div>
+                <span className="muted small">Tries free Zen local (localhost:4096) then cloud, fallback heuristic — no API key needed. Or set custom endpoint in localStorage revision_zen_endpoint.</span>
+              </label>
               <label>
                 Front — question / prompt <span className="muted">markdown + `code` + ```blocks```</span>
                 <textarea value={form.front} onChange={(e) => setForm({ ...form, front: e.target.value })} rows={4} placeholder="e.g., Two Sum — Pattern? Approach?" />
@@ -903,7 +941,7 @@ export default function App() {
               </div>
             </div>
             <div className="modal-foot">
-              <button className="btn" onClick={() => { setShowAdd(false); setEditing(null); }}>Cancel</button>
+              <button className="btn" onClick={() => { setShowAdd(false); setEditing(null); setArticleUrl(""); }}>Cancel</button>
               <button className="btn primary" onClick={handleAddOrUpdate}>{editing ? "Save Changes" : "Add Card"}</button>
             </div>
           </div>
