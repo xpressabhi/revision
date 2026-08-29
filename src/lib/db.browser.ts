@@ -40,6 +40,20 @@ function ensureSeq(key: string, v: number) {
   }
 }
 
+function deckNameToTag(name: string): string {
+  const map: Record<string, string> = {
+    "DSA / LeetCode": "dsa",
+    "System Design Concepts": "sd-concepts",
+    "System Design Use Cases": "sd-use-cases",
+    "AI Concepts": "ai-concepts",
+    "AI Use Cases": "ai-use-cases",
+    Behavioral: "behavioral",
+    Revision: "revision",
+  };
+  if (map[name]) return map[name];
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -50,20 +64,49 @@ export async function browserInitDb() {
   let states = load<CardState[]>(LS_STATES, []);
   let reviews = load<ReviewRow[]>(LS_REVIEWS, []);
 
-  // Seed decks if empty
+  // Single deck "Revision" — migrate old 6-deck installs
+  const SINGLE = "Revision";
   if (decks.length === 0) {
     const now = nowIso();
-    const names = [
-      "DSA / LeetCode",
-      "System Design Concepts",
-      "System Design Use Cases",
-      "AI Concepts",
-      "AI Use Cases",
-      "Behavioral",
-    ];
-    decks = names.map((name, i) => ({ id: i + 1, name, created_at: now }));
+    decks = [{ id: 1, name: SINGLE, created_at: now }];
     save(LS_DECKS, decks);
-    save(LS_SEQ, { decks: names.length, cards: 0, reviews: 0, states: 0 });
+    save(LS_SEQ, { decks: 1, cards: 0, reviews: 0, states: 0 });
+  } else if (decks.length > 1 || !decks.some((d) => d.name === SINGLE)) {
+    // Ensure Revision deck exists
+    let revision = decks.find((d) => d.name === SINGLE);
+    if (!revision) {
+      const now = nowIso();
+      const nid = Math.max(...decks.map((d) => d.id)) + 1;
+      revision = { id: nid, name: SINGLE, created_at: now };
+      decks.push(revision);
+    }
+    const revId = revision!.id;
+    // Migrate cards from old decks to Revision and add tag for old deck
+    const oldDecks = decks.filter((d) => d.id !== revId);
+    if (oldDecks.length > 0) {
+      const deckMap = new Map(oldDecks.map((d) => [d.id, d.name] as const));
+      let migrated = false;
+      for (const c of cards as unknown as any[]) {
+        const oldDeckName = deckMap.get(c.deck_id);
+        if (oldDeckName) {
+          const tag = deckNameToTag(oldDeckName);
+          const tags = (c.tags || "") as string;
+          const hasTag = tags.split(",").map((t) => t.trim().toLowerCase()).includes(tag);
+          if (!hasTag) {
+            c.tags = tags ? `${tags}, ${tag}` : tag;
+            c.updated_at = nowIso();
+            migrated = true;
+          }
+          c.deck_id = revId;
+          migrated = true;
+        }
+      }
+      if (migrated) save(LS_CARDS, cards);
+      // Remove old decks, keep only Revision
+      decks = decks.filter((d) => d.id === revId);
+      save(LS_DECKS, decks);
+      save(LS_SEQ, { ...load<Record<string, number>>(LS_SEQ, {}), decks: 1 });
+    }
   }
   // Ensure seq
   if (decks.length) {
@@ -219,12 +262,23 @@ export async function browserLogReview(cardId: number, grade: number) {
 export async function browserBulkCreateCards(rows: { deckName: string; front: string; back: string; tags: string }[]): Promise<number> {
   const decks = load<Deck[]>(LS_DECKS, []);
   const map = new Map(decks.map((d) => [d.name.toLowerCase(), d.id]));
+  const singleId = decks.length === 1 ? decks[0].id : null;
   let created = 0;
   for (const r of rows) {
-    const deckId = map.get(r.deckName.toLowerCase());
+    let deckId = map.get(r.deckName.toLowerCase());
+    let extraTag: string | null = null;
+    if (!deckId && singleId) {
+      deckId = singleId;
+      extraTag = deckNameToTag(r.deckName);
+    }
     if (!deckId) continue;
     if (!r.front.trim() || !r.back.trim()) continue;
-    await browserCreateCard(deckId, r.front, r.back, r.tags);
+    let tags = r.tags || "";
+    if (extraTag) {
+      const has = tags.split(",").map((t) => t.trim().toLowerCase()).includes(extraTag);
+      if (!has) tags = tags ? `${tags}, ${extraTag}` : extraTag;
+    }
+    await browserCreateCard(deckId, r.front, r.back, tags);
     created++;
   }
   return created;

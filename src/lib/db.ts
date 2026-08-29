@@ -33,6 +33,52 @@ async function getDb() {
   return dbInstance;
 }
 
+function deckNameToTag(name: string): string {
+  const map: Record<string, string> = {
+    "DSA / LeetCode": "dsa",
+    "System Design Concepts": "sd-concepts",
+    "System Design Use Cases": "sd-use-cases",
+    "AI Concepts": "ai-concepts",
+    "AI Use Cases": "ai-use-cases",
+    Behavioral: "behavioral",
+    Revision: "revision",
+  };
+  if (map[name]) return map[name];
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+async function migrateToSingleDeckTauri(db: any) {
+  // Ensure single "Revision" deck exists
+  const now = new Date().toISOString();
+  let rev = await db.select<{ id: number; name: string }[]>("SELECT id FROM decks WHERE name = $1", ["Revision"]);
+  let revisionId: number;
+  if (rev.length === 0) {
+    const r = await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", ["Revision", now]);
+    revisionId = (r as unknown as { lastInsertId: number }).lastInsertId;
+  } else {
+    revisionId = rev[0].id;
+  }
+  // If only one deck (Revision) and no other decks, no migration needed
+  const allDecks = await db.select<{ id: number; name: string }[]>("SELECT id, name FROM decks");
+  if (allDecks.length <= 1) return;
+
+  // For each old deck, migrate its cards to Revision and add tag for old deck
+  for (const deck of allDecks) {
+    if (deck.id === revisionId) continue;
+    const tag = deckNameToTag(deck.name);
+    // Update cards: set deck_id to revisionId and append tag if not already present
+    const cards = await db.select<{ id: number; tags: string }[]>("SELECT id, tags FROM cards WHERE deck_id = $1", [deck.id]);
+    for (const card of cards) {
+      const tags = card.tags || "";
+      const hasTag = tags.split(",").map((t) => t.trim().toLowerCase()).includes(tag);
+      const newTags = hasTag ? tags : tags ? `${tags}, ${tag}` : tag;
+      await db.execute("UPDATE cards SET deck_id = $1, tags = $2, updated_at = $3 WHERE id = $4", [revisionId, newTags, now, card.id]);
+    }
+    // Delete old deck (now empty, cards moved)
+    await db.execute("DELETE FROM decks WHERE id = $1", [deck.id]);
+  }
+}
+
 // Initialize schema
 export async function initDb() {
   if (!isTauri()) {
@@ -86,16 +132,16 @@ export async function initDb() {
     const existing = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks");
     if (existing[0].cnt === 0) {
       const now = new Date().toISOString();
-      const defaultDecks = [
-        "DSA / LeetCode",
-        "System Design Concepts",
-        "System Design Use Cases",
-        "AI Concepts",
-        "AI Use Cases",
-        "Behavioral",
-      ];
-      for (const name of defaultDecks) {
-        await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", [name, now]);
+      await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", ["Revision", now]);
+    } else {
+      // For existing installs with 6 decks, migrate to single deck + tags on first run after update
+      const deckCount = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks");
+      if (deckCount[0].cnt > 1) {
+        // Check if migration has already been done by seeing if any deck besides Revision exists
+        const nonRevision = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks WHERE name != $1", ["Revision"]);
+        if (nonRevision[0].cnt > 0) {
+          await migrateToSingleDeckTauri(db);
+        }
       }
     }
     await db.execute(
@@ -364,12 +410,23 @@ export async function bulkCreateCards(
   try {
     const decks = await getDecks();
     const deckMap = new Map(decks.map((d) => [d.name.toLowerCase(), d.id]));
+    const singleId = decks.length === 1 ? decks[0].id : null;
     let created = 0;
     for (const r of rows) {
-      const deckId = deckMap.get(r.deckName.toLowerCase());
+      let deckId = deckMap.get(r.deckName.toLowerCase());
+      let extraTag: string | null = null;
+      if (!deckId && singleId) {
+        deckId = singleId;
+        extraTag = deckNameToTag(r.deckName);
+      }
       if (!deckId) continue;
       if (!r.front.trim() || !r.back.trim()) continue;
-      await createCard(deckId, r.front, r.back, r.tags);
+      let tags = r.tags || "";
+      if (extraTag) {
+        const has = tags.split(",").map((t) => t.trim().toLowerCase()).includes(extraTag);
+        if (!has) tags = tags ? `${tags}, ${extraTag}` : extraTag;
+      }
+      await createCard(deckId, r.front, r.back, tags);
       created++;
     }
     return created;

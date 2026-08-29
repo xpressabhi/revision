@@ -14,8 +14,6 @@ import {
   deduplicateCards,
   initDb,
   exportAllCards,
-  createDeck,
-  deleteDeck,
 } from "./lib/db";
 import { nextState } from "./lib/srs";
 import type { CardWithState, Deck, DeckStats, Grade } from "./lib/types";
@@ -39,6 +37,16 @@ const DECK_COLORS: Record<string, string> = {
 function deckColor(name: string) {
   return DECK_COLORS[name] ?? "#64748b";
 }
+function tagColor(tag: string) {
+  if (tag.includes("dsa")) return "#0ea5e9";
+  if (tag.includes("sd")) return "#8b5cf6";
+  if (tag.includes("ai")) return "#10b981";
+  if (tag.includes("behavioral")) return "#6366f1";
+  if (tag.includes("medium")) return "#f59e0b";
+  if (tag.includes("hard")) return "#dc2626";
+  if (tag.includes("easy")) return "#10b981";
+  return "#64748b";
+}
 
 export default function App() {
   const [view, setView] = useState<View>("today");
@@ -49,7 +57,7 @@ export default function App() {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [search, setSearch] = useState("");
-  const [deckFilter, setDeckFilter] = useState<number | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
@@ -57,8 +65,6 @@ export default function App() {
   const [editing, setEditing] = useState<CardWithState | null>(null);
   const [viewingCard, setViewingCard] = useState<CardWithState | null>(null);
   const [form, setForm] = useState({ deckId: 0, front: "", back: "", tags: "" });
-  const [showDeckMgr, setShowDeckMgr] = useState(false);
-  const [newDeckName, setNewDeckName] = useState("");
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,15 +117,50 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Sync tray with due/new counts
+  const dueTotal = stats.reduce((a, s) => a + s.due, 0);
+  const newTotal = stats.reduce((a, s) => a + s.newCount, 0);
+  const totalCards = stats.reduce((a, s) => a + s.total, 0);
+  const hasBlind75 = useMemo(() => allCards.some((c) => c.tags.includes("blind75")), [allCards]);
+  const duplicateCount = useMemo(() => {
+    const seen = new Set<string>();
+    let dup = 0;
+    for (const c of allCards) {
+      const k = `${c.deck_id}::${c.front.trim()}`;
+      if (seen.has(k)) dup++;
+      else seen.add(k);
+    }
+    return dup;
+  }, [allCards]);
+  const allTags = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of allCards) {
+      for (const t of c.tags.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+        map.set(t, (map.get(t) || 0) + 1);
+      }
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  }, [allCards]);
+  const tagStats = useMemo(() => {
+    const now = new Date();
+    return allTags.slice(0, 6).map(([tag]) => {
+      const forTag = allCards.filter((c) => c.tags.toLowerCase().split(",").map((t) => t.trim()).includes(tag));
+      const due = forTag.filter((c) => c.state !== "new" && new Date(c.due_at) <= now).length;
+      return { tag, total: forTag.length, due };
+    });
+  }, [allTags, allCards]);
+  const singleDeckId = decks.length === 1 ? decks[0]?.id ?? 0 : 0;
+
+  // Sync tray with due/new counts — single deck: show per-tag breakdown
   useEffect(() => {
     if (!isTauriEnv || stats.length === 0) return;
     const due = stats.reduce((a, s) => a + s.due, 0);
     const newCount = stats.reduce((a, s) => a + s.newCount, 0);
     const total = stats.reduce((a, s) => a + s.total, 0);
-    const decks = stats.map((s) => ({ name: s.deck_name, due: s.due, total: s.total }));
+    const decks = stats.length === 1 && tagStats.length > 0
+      ? tagStats.map((t) => ({ name: t.tag, due: t.due, total: t.total }))
+      : stats.map((s) => ({ name: s.deck_name, due: s.due, total: s.total }));
     invoke("update_tray", { due, new: newCount, total, decks }).catch(() => {});
-  }, [stats, isTauriEnv]);
+  }, [stats, tagStats, isTauriEnv]);
 
   // Listen for tray Review action
   useEffect(() => {
@@ -187,7 +228,7 @@ export default function App() {
 
   const filteredBrowse = useMemo(() => {
     let rows = allCards;
-    if (deckFilter) rows = rows.filter((c) => c.deck_id === deckFilter);
+    if (tagFilter) rows = rows.filter((c) => c.tags.toLowerCase().split(",").map((t) => t.trim()).includes(tagFilter.toLowerCase()));
     if (stateFilter) rows = rows.filter((c) => c.state === stateFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -200,45 +241,31 @@ export default function App() {
       );
     }
     return rows;
-  }, [allCards, deckFilter, stateFilter, search]);
-
-  const dueTotal = stats.reduce((a, s) => a + s.due, 0);
-  const newTotal = stats.reduce((a, s) => a + s.newCount, 0);
-  const totalCards = stats.reduce((a, s) => a + s.total, 0);
-  const hasBlind75 = useMemo(() => allCards.some((c) => c.tags.includes("blind75")), [allCards]);
-  const duplicateCount = useMemo(() => {
-    const seen = new Set<string>();
-    let dup = 0;
-    for (const c of allCards) {
-      const k = `${c.deck_id}::${c.front.trim()}`;
-      if (seen.has(k)) dup++;
-      else seen.add(k);
-    }
-    return dup;
-  }, [allCards]);
+  }, [allCards, tagFilter, stateFilter, search]);
 
   async function handleAddOrUpdate() {
     if (!form.front.trim() || !form.back.trim()) {
       setToast("Front and Back required");
       return;
     }
+    const targetDeckId = singleDeckId || form.deckId || decks[0]?.id || 0;
     if (editing) {
-      await updateCard(editing.id, form.deckId, form.front, form.back, form.tags);
+      await updateCard(editing.id, targetDeckId, form.front, form.back, form.tags);
       setToast("Card updated");
     } else {
-      await createCard(form.deckId, form.front, form.back, form.tags);
+      await createCard(targetDeckId, form.front, form.back, form.tags);
       setToast("Card added");
     }
     setShowAdd(false);
     setEditing(null);
-    setForm({ deckId: decks[0]?.id ?? 0, front: "", back: "", tags: "" });
+    setForm({ deckId: singleDeckId || decks[0]?.id || 0, front: "", back: "", tags: "" });
     await refresh();
     await refreshQueue();
   }
 
   function openEdit(c: CardWithState) {
     setEditing(c);
-    setForm({ deckId: c.deck_id, front: c.front, back: c.back, tags: c.tags });
+    setForm({ deckId: singleDeckId || c.deck_id, front: c.front, back: c.back, tags: c.tags });
     setShowAdd(true);
   }
 
@@ -326,28 +353,6 @@ export default function App() {
     await refreshQueue();
   }
 
-  async function handleCreateDeck() {
-    const name = newDeckName.trim();
-    if (!name) return;
-    if (decks.some((d) => d.name.toLowerCase() === name.toLowerCase())) {
-      setToast("Deck already exists");
-      return;
-    }
-    await createDeck(name);
-    setNewDeckName("");
-    await refresh();
-    setToast(`Deck "${name}" created`);
-  }
-
-  async function handleDeleteDeck(id: number, name: string) {
-    const count = allCards.filter((c) => c.deck_id === id).length;
-    if (!confirm(`Delete deck "${name}" and its ${count} cards? This cannot be undone.`)) return;
-    await deleteDeck(id);
-    await refresh();
-    await refreshQueue();
-    setToast("Deck deleted");
-  }
-
   async function toggleAutostart() {
     try {
       const { enable, disable } = await import("@tauri-apps/plugin-autostart");
@@ -427,37 +432,21 @@ export default function App() {
         </nav>
 
         <div className="sidebar-section">
-          <div className="sidebar-label">
-            Decks <button className="mini" onClick={() => setShowDeckMgr((v) => !v)}>{showDeckMgr ? "−" : "+"}</button>
-          </div>
+          <div className="sidebar-label">Tags</div>
           <div className="deck-list">
-            {decks.map((d) => {
-              const s = stats.find((x) => x.deck_id === d.id);
-              return (
-                <div key={d.id} className="deck-row">
-                  <span className="deck-dot" style={{ background: deckColor(d.name) }} />
-                  <span className="deck-name" title={d.name}>{d.name}</span>
-                  <span className="deck-count">{s ? `${s.due} due • ${s.total}` : ""}</span>
+            {allTags.length === 0 ? (
+              <span className="muted small">No tags yet — add tags like dsa, sd-concepts</span>
+            ) : (
+              allTags.map(([tag, count]) => (
+                <div key={tag} className="deck-row" style={{ cursor: "pointer" }} onClick={() => { setView("browse"); setSearch(tag); }} title={`Filter by ${tag}`}>
+                  <span className="deck-dot" style={{ background: tag.includes("dsa") ? "#0ea5e9" : tag.includes("sd") ? "#8b5cf6" : tag.includes("ai") ? "#10b981" : "#64748b" }} />
+                  <span className="deck-name">{tag}</span>
+                  <span className="deck-count">{count}</span>
                 </div>
-              );
-            })}
+              ))
+            )}
           </div>
-          {showDeckMgr && (
-            <div className="deck-mgr">
-              <div className="deck-mgr-row">
-                <input value={newDeckName} onChange={(e) => setNewDeckName(e.target.value)} placeholder="New deck name" onKeyDown={(e) => e.key === "Enter" && handleCreateDeck()} />
-                <button className="btn small" onClick={handleCreateDeck}>Add</button>
-              </div>
-              <div className="deck-mgr-list">
-                {decks.map((d) => (
-                  <div key={d.id} className="deck-mgr-item">
-                    <span>{d.name}</span>
-                    <button className="link danger" onClick={() => handleDeleteDeck(d.id, d.name)}>delete</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <div className="muted small" style={{ marginTop: 8 }}>Single deck “Revision” • {totalCards} cards • tags hold pillars</div>
         </div>
 
         <div className="sidebar-foot">
@@ -548,24 +537,41 @@ export default function App() {
             )}
 
             <div className="decks-grid">
-              {stats.map((s) => (
-                <div key={s.deck_id} className="deck-card" style={{ borderLeftColor: deckColor(s.deck_name) }}>
-                  <div className="deck-card-head">
-                    <span className="dot" style={{ background: deckColor(s.deck_name) }} />
-                    <strong>{s.deck_name}</strong>
-                    <span className="pill">{s.total} cards</span>
-                  </div>
-                  <div className="deck-card-stats">
-                    <span className="stat due">{s.due} due</span>
-                    <span className="stat new">{s.newCount} new</span>
-                    <span className="stat">{s.learning} learning</span>
-                    <span className="stat">{s.review} review</span>
-                  </div>
-                  <div className="bar">
-                    <div className="bar-fill" style={{ width: `${s.total ? Math.round(((s.total - s.newCount) / s.total) * 100) : 0}%`, background: deckColor(s.deck_name) }} />
-                  </div>
-                </div>
-              ))}
+              {(stats.length === 1 && tagStats.length > 0
+                ? tagStats.map((t) => (
+                    <div key={t.tag} className="deck-card" style={{ borderLeftColor: tagColor(t.tag) }}>
+                      <div className="deck-card-head">
+                        <span className="dot" style={{ background: tagColor(t.tag) }} />
+                        <strong>{t.tag}</strong>
+                        <span className="pill">{t.total} cards</span>
+                      </div>
+                      <div className="deck-card-stats">
+                        <span className="stat due">{t.due} due</span>
+                        <span className="stat">{t.total - t.due} new/other</span>
+                      </div>
+                      <div className="bar">
+                        <div className="bar-fill" style={{ width: `${t.total ? Math.round((t.due / t.total) * 100) : 0}%`, background: tagColor(t.tag) }} />
+                      </div>
+                    </div>
+                  ))
+                : stats.map((s) => (
+                    <div key={s.deck_id} className="deck-card" style={{ borderLeftColor: deckColor(s.deck_name) }}>
+                      <div className="deck-card-head">
+                        <span className="dot" style={{ background: deckColor(s.deck_name) }} />
+                        <strong>{s.deck_name}</strong>
+                        <span className="pill">{s.total} cards</span>
+                      </div>
+                      <div className="deck-card-stats">
+                        <span className="stat due">{s.due} due</span>
+                        <span className="stat new">{s.newCount} new</span>
+                        <span className="stat">{s.learning} learning</span>
+                        <span className="stat">{s.review} review</span>
+                      </div>
+                      <div className="bar">
+                        <div className="bar-fill" style={{ width: `${s.total ? Math.round(((s.total - s.newCount) / s.total) * 100) : 0}%`, background: deckColor(s.deck_name) }} />
+                      </div>
+                    </div>
+                  )))}
             </div>
 
             {totalCards === 0 && (
@@ -686,14 +692,16 @@ export default function App() {
                 <h1>Browse</h1>
                 <p className="muted">Search, filter, edit. Front/Back are markdown + code + image paste (stores as data URL).</p>
               </div>
-              <button className="btn primary" onClick={() => { setEditing(null); setForm({ deckId: decks[0]?.id ?? 0, front: "", back: "", tags: "" }); setShowAdd(true); }}>＋ Add Card</button>
+              <button className="btn primary" onClick={() => { setEditing(null); setForm({ deckId: singleDeckId || decks[0]?.id || 0, front: "", back: "", tags: "" }); setShowAdd(true); }}>＋ Add Card</button>
             </header>
 
             <div className="toolbar">
-              <input className="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search front, back, tags, deck… (⌘K)" />
-              <select value={deckFilter ?? ""} onChange={(e) => setDeckFilter(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">All decks</option>
-                {decks.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              <input className="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search front, back, tags… (⌘K)" />
+              <select value={tagFilter ?? ""} onChange={(e) => setTagFilter(e.target.value || null)}>
+                <option value="">All tags</option>
+                {allTags.map(([t]) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
               </select>
               <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}>
                 <option value="">All states</option>
@@ -788,12 +796,8 @@ export default function App() {
               <button className="icon-btn" onClick={() => { setShowAdd(false); setEditing(null); }}>×</button>
             </div>
             <div className="form">
-              <label>
-                Deck
-                <select value={form.deckId} onChange={(e) => setForm({ ...form, deckId: Number(e.target.value) })}>
-                  {decks.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </label>
+              <input type="hidden" value={form.deckId} readOnly />
+              <div className="muted small">Single deck “Revision” • add pillar via tags: <code>dsa</code>, <code>sd-concepts</code>, <code>sd-use-cases</code>, <code>ai-concepts</code>, <code>ai-use-cases</code>, <code>behavioral</code></div>
               <label>
                 Front — question / prompt <span className="muted">markdown + `code` + ```blocks```</span>
                 <textarea value={form.front} onChange={(e) => setForm({ ...form, front: e.target.value })} rows={4} placeholder="e.g., Two Sum — Pattern? Approach?" />
