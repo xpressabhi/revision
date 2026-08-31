@@ -67,6 +67,7 @@ export default function App() {
   const [form, setForm] = useState({ deckId: 0, front: "", back: "", tags: "" });
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
+  const [chromeAvailable, setChromeAvailable] = useState<boolean | null>(null);
   const [showDestructive, setShowDestructive] = useState(() => {
     try {
       return localStorage.getItem("revision_showDestructive") === "true";
@@ -85,7 +86,13 @@ export default function App() {
       return "";
     }
   });
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [bookmarksDraft, setBookmarksDraft] = useState<import("./lib/bookmarks").BookmarkDraft[]>([]);
+  const [bookmarksIgnored, setBookmarksIgnored] = useState<(import("./lib/bookmarks").BookmarkDraft & { reason: string })[]>([]);
+  const [isAutoBookmark, setIsAutoBookmark] = useState(false);
+  const [bookmarkSearch, setBookmarkSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bookmarkFileRef = useRef<HTMLInputElement>(null);
 
   const currentCard = dueQueue[reviewIdx] ?? null;
   const progress = dueQueue.length ? `${reviewIdx + 1} / ${dueQueue.length}` : "";
@@ -128,6 +135,22 @@ export default function App() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!isTauriEnv) {
+      setChromeAvailable(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { chromeBookmarksExists } = await import("./lib/bookmarks");
+        const found = await chromeBookmarksExists();
+        setChromeAvailable(found);
+      } catch {
+        setChromeAvailable(false);
+      }
+    })();
+  }, [isTauriEnv]);
 
   useEffect(() => {
     if (!toast) return;
@@ -439,6 +462,121 @@ export default function App() {
     await refreshQueue();
   }
 
+  async function handleReadChromeBookmarks(): Promise<boolean> {
+    try {
+      const { readChromeBookmarksFile, parseChromeBookmarksJson, toDrafts } = await import("./lib/bookmarks");
+      const json = await readChromeBookmarksFile();
+      const raw = parseChromeBookmarksJson(json);
+      const existingUrls = new Set(allCards.flatMap((c) => extractUrls(c.back + " " + c.front)));
+      const existingFronts = new Set(allCards.map((c) => c.front.trim()));
+      const { willAdd, ignored } = toDrafts(raw, existingUrls, existingFronts);
+      setBookmarksDraft(willAdd);
+      setBookmarksIgnored(ignored);
+      setShowBookmarks(true);
+      setToast(`Found ${raw.length} bookmarks • Will add ${willAdd.length} • Ignored ${ignored.length}`);
+      return true;
+    } catch (e) {
+      const msg = String(e);
+      // macOS TCC commonly blocks direct read: show actionable hint
+      if (msg.includes("not permitted") || msg.includes("Permission denied")) {
+        setToast(`Direct Chrome read blocked by macOS (needs file picker). Use “Pick File” and select ~/Library/.../Chrome/Default/Bookmarks or Exported HTML.`);
+      } else {
+        setToast(`Chrome bookmarks not found — ${msg.slice(0,120)} — try “Import HTML/JSON” and pick Exported HTML or raw Bookmarks JSON`);
+      }
+      return false;
+    }
+  }
+
+  async function handleBookmarksHtmlFile(file: File) {
+    try {
+      const text = await file.text();
+      const { parseBookmarksHtml, parseChromeBookmarksJson, toDrafts } = await import("./lib/bookmarks");
+      const isJson = text.trim().startsWith("{");
+      const raw = isJson ? parseChromeBookmarksJson(text) : parseBookmarksHtml(text);
+      const existingUrls = new Set(allCards.flatMap((c) => extractUrls(c.back + " " + c.front)));
+      const existingFronts = new Set(allCards.map((c) => c.front.trim()));
+      const { willAdd, ignored } = toDrafts(raw, existingUrls, existingFronts);
+      setBookmarksDraft(willAdd);
+      setBookmarksIgnored(ignored);
+      setShowBookmarks(true);
+      setToast(`Parsed ${raw.length} bookmarks • Will add ${willAdd.length}`);
+    } catch (e) {
+      setToast(String(e).slice(0, 120));
+    }
+  }
+
+  async function handleImportBookmarksClick() {
+    // Unified: always ask for file path (most reliable — grants Powerbox access on macOS, avoids TCC “not permitted”)
+    // Browser: must be synchronous click
+    if (!isTauriEnv) {
+      bookmarkFileRef.current?.click();
+      return;
+    }
+    // Tauri: open system picker directly — user picks Bookmarks (no ext, via All files) or exported HTML/JSON
+    try {
+      const { pickAndReadBookmarksViaDialog, parseChromeBookmarksJson, parseBookmarksHtml, toDrafts } = await import("./lib/bookmarks");
+      const text = await pickAndReadBookmarksViaDialog();
+      const isJson = text.trim().startsWith("{");
+      const raw = isJson ? parseChromeBookmarksJson(text) : parseBookmarksHtml(text);
+      if (raw.length === 0) {
+        setToast("Picked file had 0 bookmarks — try Export HTML: Chrome → Bookmarks → Manager → ⋮ → Export");
+        return;
+      }
+      const existingUrls = new Set(allCards.flatMap((c) => extractUrls(c.back + " " + c.front)));
+      const existingFronts = new Set(allCards.map((c) => c.front.trim()));
+      const { willAdd, ignored } = toDrafts(raw, existingUrls, existingFronts);
+      setBookmarksDraft(willAdd);
+      setBookmarksIgnored(ignored);
+      setShowBookmarks(true);
+      setToast(`Picked ${raw.length} bookmarks • Will add ${willAdd.length} • Ignored ${ignored.length}`);
+    } catch (e: any) {
+      const msg = String(e ?? "");
+      if (msg.includes("No file selected") || msg.includes("cancelled") || msg.includes("Cancel")) {
+        setToast("Pick cancelled — use Chrome → Bookmarks → Manager → ⋮ → Export bookmarks to get HTML, then Import HTML/JSON");
+      } else {
+        console.warn("pickAndReadBookmarksViaDialog failed", e);
+        setToast(`Pick failed: ${msg.slice(0,120)}`);
+      }
+    }
+  }
+
+  async function handleAddBookmarks() {
+    const checked = bookmarksDraft.filter((b) => b.checked);
+    if (checked.length === 0) {
+      setToast("Select at least one bookmark");
+      return;
+    }
+    let toCreate = checked.map((b) => ({
+      deckName: "Revision",
+      front: b.title.slice(0, 120),
+      back: `**Link:** ${b.url}\n\n**Summary:** ${b.folderPath ? `Folder: ${b.folderPath}` : ""}\n\n**Takeaways:**\n- `,
+      tags: b.tags,
+    }));
+    if (isAutoBookmark) {
+      setToast(`Auto-organizing ${toCreate.length} bookmarks via Zen…`);
+      try {
+        const { organizeArticle } = await import("./lib/article");
+        const organized: typeof toCreate = [];
+        for (const item of toCreate) {
+          try {
+            const urlMatch = item.back.match(/https?:\/\/[^\s]+/);
+            const url = urlMatch ? urlMatch[0] : item.front;
+            const o = await organizeArticle(url);
+            organized.push({ deckName: "Revision", front: o.front, back: o.back, tags: o.tags });
+          } catch {
+            organized.push(item);
+          }
+        }
+        toCreate = organized;
+      } catch {}
+    }
+    const n = await bulkCreateCards(toCreate);
+    setToast(`Added ${n} bookmarks to Revision`);
+    setShowBookmarks(false);
+    await refresh();
+    await refreshQueue();
+  }
+
   async function toggleAutostart() {
     try {
       const { enable, disable } = await import("@tauri-apps/plugin-autostart");
@@ -591,6 +729,9 @@ export default function App() {
               <div className="head-actions">
                 <button className="btn" onClick={handleExport}>Export CSV</button>
                 <button className="btn" onClick={() => fileInputRef.current?.click()}>Import CSV</button>
+                <button className="btn" onClick={handleImportBookmarksClick} title={isTauriEnv ? "Pick Bookmarks file or exported HTML/JSON — grants macOS access (avoids auto-detect TCC block)" : "Import exported Bookmarks.html or Bookmarks JSON"}>
+                  {isTauriEnv ? "Import Bookmarks" : "Import Bookmarks.html"}
+                </button>
                 {isTauriEnv && <button className="btn" onClick={toggleWidget}>◫ Widget</button>}
                 {!hasBlind75 && <button className="btn primary" onClick={handleSeedBlind75} style={{ background: "#0ea5e9", borderColor: "#0ea5e9" }}>Seed Blind 75</button>}
                 <input ref={fileInputRef} type="file" accept=".csv,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = ""; }} />
@@ -698,6 +839,7 @@ export default function App() {
                   <button className="btn primary" onClick={handleSeed}>Seed 13 starter cards</button>
                   <button className="btn primary" onClick={handleSeedBlind75} style={{ background: "#0ea5e9", borderColor: "#0ea5e9" }}>Seed Blind 75 (75)</button>
                   <button className="btn" onClick={() => setShowAdd(true)}>Add card manually</button>
+                  <button className="btn" onClick={handleImportBookmarksClick}>Import Bookmarks</button>
                 </div>
                 <div className="seed-preview">
                   <div className="muted small">Seed 13: 3 DSA, 3 SD Concepts, 2 SD Use Cases, 2 AI Concepts, 1 AI Use Case, 2 Behavioral<br />Blind 75: Full LeetCode Blind 75 list from oizxjoit (DSA) — also available as blind75.csv for Import</div>
@@ -824,6 +966,7 @@ export default function App() {
                 <option value="learning">learning</option>
                 <option value="review">review</option>
               </select>
+              <button className="btn small" onClick={handleImportBookmarksClick} title={isTauriEnv ? "Pick Bookmarks file or exported HTML/JSON" : "Import Bookmarks.html / JSON"}>Import Bookmarks</button>
               <span className="muted small">{filteredBrowse.length} cards</span>
               <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
                 {showDestructive ? (
@@ -971,6 +1114,21 @@ export default function App() {
                 </div>
               </div>
             </div>
+            <div className="card" style={{ maxWidth: 560, marginTop: 16 }}>
+              <div className="form">
+                <h3 style={{ margin: "0 0 8px" }}>Import Chrome Bookmarks</h3>
+                <p className="muted small">Add articles/links from Chrome for revision. Preview before adding — edit titles/URLs/tags, choose what to add vs ignore.</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+                  <button className="btn small primary" onClick={handleImportBookmarksClick} title="Pick Bookmarks file or exported HTML/JSON — system picker grants macOS access">Import Bookmarks</button>
+                  {isTauriEnv && chromeAvailable && (
+                    <button className="btn small" onClick={handleReadChromeBookmarks} title="Try direct auto-detect without picker (may be blocked by macOS TCC)">Try Direct Read</button>
+                  )}
+                  <button className="btn small" onClick={() => bookmarkFileRef.current?.click()}>Import HTML/JSON (input)</button>
+                  {isTauriEnv && chromeAvailable === false && <span className="muted small">No file at default location — picker will ask for path</span>}
+                </div>
+                <span className="muted small"><strong>Import Bookmarks</strong> now asks for file — pick <code>~/Library/Application Support/Google/Chrome/Default/Bookmarks</code> (in picker choose “All files” to see the no-extension file) or pick exported HTML from <code>Chrome → Bookmarks → Manager → ⋮ → Export bookmarks</code>. Local only — preview before adding. “Try Direct Read” is optional auto-detect (may be blocked by macOS TCC).</span>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -1071,6 +1229,67 @@ export default function App() {
         </div>
       )}
 
+      {showBookmarks && (
+        <div className="modal-backdrop" onClick={() => setShowBookmarks(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 880, width: "95vw" }}>
+            <div className="modal-head">
+              <h2>Import Bookmarks — Preview</h2>
+              <button className="icon-btn" onClick={() => setShowBookmarks(false)}>×</button>
+            </div>
+            <div className="form" style={{ maxHeight: "70vh", overflow: "auto" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+                <span className="muted small">Will add <strong>{bookmarksDraft.filter((b) => b.checked).length}</strong> of {bookmarksDraft.length} • Ignored {bookmarksIgnored.length}</span>
+                <label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={isAutoBookmark} onChange={(e) => setIsAutoBookmark(e.target.checked)} /> Auto-organize with Zen</label>
+                <input value={bookmarkSearch} onChange={(e) => setBookmarkSearch(e.target.value)} placeholder="Filter by title/url/tags" style={{ flex: "1 1 200px", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 8px", fontSize: 12 }} />
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button className="btn small" onClick={() => setBookmarksDraft((d) => d.map((b) => ({ ...b, checked: true })))}>Select all</button>
+                <button className="btn small" onClick={() => setBookmarksDraft((d) => d.map((b) => ({ ...b, checked: false })))}>None</button>
+                <span className="muted small" style={{ marginLeft: "auto" }}>Edit title/url/tags inline — uncheck to skip</span>
+              </div>
+
+              <div className="table-wrap" style={{ marginTop: 12 }}>
+                <table className="table">
+                  <thead><tr><th>✓</th><th>Title</th><th>URL</th><th>Tags</th><th>Folder</th></tr></thead>
+                  <tbody>
+                    {bookmarksDraft.filter((b) => !bookmarkSearch || (b.title + b.url + b.tags + b.folderPath).toLowerCase().includes(bookmarkSearch.toLowerCase())).map((b, idx) => (
+                      <tr key={idx}>
+                        <td><input type="checkbox" checked={b.checked} onChange={(e) => setBookmarksDraft((d) => d.map((x, i) => (i === idx ? { ...x, checked: e.target.checked } : x)))} /></td>
+                        <td><input value={b.title} onChange={(e) => setBookmarksDraft((d) => d.map((x, i) => (i === idx ? { ...x, title: e.target.value } : x)))} style={{ width: 200, border: "1px solid var(--line)", borderRadius: 6, padding: "4px 6px", fontSize: 12 }} /></td>
+                        <td><input value={b.url} onChange={(e) => setBookmarksDraft((d) => d.map((x, i) => (i === idx ? { ...x, url: e.target.value } : x)))} style={{ width: 220, border: "1px solid var(--line)", borderRadius: 6, padding: "4px 6px", fontSize: 11 }} title={b.url} /></td>
+                        <td><input value={b.tags} onChange={(e) => setBookmarksDraft((d) => d.map((x, i) => (i === idx ? { ...x, tags: e.target.value } : x)))} style={{ width: 160, border: "1px solid var(--line)", borderRadius: 6, padding: "4px 6px", fontSize: 11 }} /></td>
+                        <td className="muted small">{b.folderPath || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {bookmarksDraft.length === 0 && <div className="table-empty">No bookmarks to add</div>}
+              </div>
+
+              <details style={{ marginTop: 12 }}>
+                <summary className="muted small" style={{ cursor: "pointer" }}>Ignored ({bookmarksIgnored.length}) — duplicates, invalid, folders</summary>
+                <div className="table-wrap" style={{ marginTop: 8 }}>
+                  <table className="table">
+                    <thead><tr><th>Title</th><th>URL</th><th>Reason</th></tr></thead>
+                    <tbody>
+                      {bookmarksIgnored.filter((b) => !bookmarkSearch || (b.title + b.url).toLowerCase().includes(bookmarkSearch.toLowerCase())).slice(0, 100).map((b, idx) => (
+                        <tr key={idx}><td className="muted small">{b.title.slice(0, 60)}</td><td className="muted small" title={b.url}>{b.url.slice(0, 50)}</td><td className="muted small">{b.reason}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </div>
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setShowBookmarks(false)}>Cancel</button>
+              <button className="btn primary" onClick={handleAddBookmarks} disabled={bookmarksDraft.filter((b) => b.checked).length === 0}>Add {bookmarksDraft.filter((b) => b.checked).length} to Revision →</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global hidden input for bookmarks import (shared by Today/Browse/Settings buttons) — always mounted. Accept all so raw “Bookmarks” (no ext) can be picked via All Files */}
+      <input ref={bookmarkFileRef} type="file" accept=".html,.htm,.json,application/json,text/html,*/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBookmarksHtmlFile(f); e.target.value = ""; }} />
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
