@@ -1,8 +1,60 @@
 # Revision — Active Recall (Tauri + SQLite)
 
+[![Release](https://img.shields.io/github/v/release/xpressabhi/revision?label=latest%20release&style=flat-square)](https://github.com/xpressabhi/revision/releases/latest)
+[![Build](https://github.com/xpressabhi/revision/actions/workflows/release.yml/badge.svg)](https://github.com/xpressabhi/revision/actions/workflows/release.yml)
+
 Local-first desktop app for principal-level interview prep. Spaced repetition for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral**.
 
 > Works fully offline. Single SQLite file `revision.db` (Tauri) or `localStorage` (browser preview). No cloud, no account.
+
+### Download — Windows & macOS
+
+> **Latest release:** https://github.com/xpressabhi/revision/releases/latest — download the installer for your OS below. No sign-in required.
+
+| Platform | Installer | Direct link (latest) |
+|---|---|---|
+| **macOS Apple Silicon** | `Revision_0.1.0_aarch64.dmg` | [Download .dmg (arm64)](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_aarch64.dmg) |
+| **macOS Intel** | `Revision_0.1.0_x64.dmg` | [Download .dmg (Intel)](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_x64.dmg) |
+| **Windows 10/11** | `Revision_0.1.0_x64-setup.exe` (NSIS) | [Download .exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_x64-setup.exe) |
+| **Windows 10/11** | `Revision_0.1.0_x64_en-US.msi` (MSI) | [Download .msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_x64_en-US.msi) |
+
+**How to install:**
+- **macOS:** Open the `.dmg` → drag `Revision` to `Applications` → first launch right-click → Open (unsigned build).
+- **Windows:** Run the `.exe` (or `.msi`) → follow installer → launch from Start Menu.
+
+> If a direct link 404s, the release hasn't been published yet — use the [Releases page](https://github.com/xpressabhi/revision/releases) or the [Actions artifacts](https://github.com/xpressabhi/revision/actions/workflows/release.yml) (every push to `main` builds a `.dmg` + `.exe` you can download without a release).
+
+<details>
+<summary><strong>For maintainers: create a new release (triggers .exe + .dmg build)</strong></summary>
+
+```bash
+# bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml together
+npm version patch   # or minor/major — updates package.json + creates git tag v0.1.x
+# make sure tauri.conf.json and Cargo.toml version match package.json, then:
+git push origin main --tags
+# or manually:
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Tag push triggers `.github/workflows/release.yml` on `macos-latest` + `windows-latest`:
+- builds `Revision_0.1.0_aarch64.dmg` / `Revision_0.1.0_x64.dmg` and `Revision_0.1.0_x64-setup.exe` / `.msi`
+- publishes them to `https://github.com/xpressabhi/revision/releases/tag/v0.1.0`
+- every push to `main` also builds and uploads the same bundles as **Actions artifacts** (download from the Actions tab without a release)
+
+Local build without CI:
+```bash
+npm run tauri build   # -> src-tauri/target/release/bundle/dmg/*.dmg  and  nsis/*.exe / msi/*.msi (platform-specific)
+
+# On macOS 27 / Xcode 27 beta, stable Rust 1.98 fails with:
+#   "mis-aligned LINKEDIT string pool" for sqlx_macros.
+# Use nightly (fixed in 1.100+):
+#   rustup toolchain install nightly
+#   rustup default nightly   # or: rustup override set nightly
+#   npm run tauri build
+# GitHub Actions already uses nightly for macOS, so CI is unaffected.
+```
+</details>
 
 ### Features
 - 6 pre-seeded decks, generic Front/Back cards with markdown + code blocks + tags
