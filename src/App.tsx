@@ -591,7 +591,7 @@ export default function App() {
       {/* titlebar */}
       <header className={`titlebar ${isTauri ? "is-tauri" : ""}`}>
         <div className="tb-title" data-tauri-drag-region>
-          <span className="tb-logo" />
+          <img className="tb-logo" src="/revision-logo.png" alt="Revision" draggable={false} />
           <span data-tauri-drag-region>Revision</span>
           <span className="muted" style={{ fontWeight: 400 }}>{VIEW_LABEL[view]}</span>
         </div>

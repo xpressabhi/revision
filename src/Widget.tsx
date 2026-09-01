@@ -50,7 +50,7 @@ export default function Widget() {
   return (
     <div className="widget-root" data-tauri-drag-region>
       <div className="widget-header" data-tauri-drag-region>
-        <span className="widget-title">Revision</span>
+        <span className="widget-title"><img className="widget-logo" src="/revision-logo.png" alt="" draggable={false} />Revision</span>
         <span className="widget-sub">Due {due} • New {fresh}</span>
         <button className="widget-close" onClick={() => invoke("hide_widget")} title="Hide widget">×</button>
       </div>

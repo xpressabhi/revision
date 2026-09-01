@@ -378,12 +378,12 @@ body {
   gap: 8px;
 }
 .tb-logo {
-  width: 16px;
   height: 16px;
-  border-radius: 5px;
-  background: var(--accent-gradient, var(--accent));
-  box-shadow: 0 0 12px var(--accent-glow);
+  width: auto;
+  border-radius: 4px;
   flex: 0 0 auto;
+  object-fit: contain;
+  -webkit-user-drag: none;
 }
 .tb-actions {
   margin-left: auto;
@@ -2397,13 +2397,11 @@ table.tbl {
   align-items: center;
   gap: 6px;
 }
-.widget-title::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 3.5px;
-  background: var(--accent-gradient, var(--accent));
-  box-shadow: 0 0 8px var(--accent-glow);
+.widget-logo {
+  height: 12px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 3px;
 }
 .widget-sub {
   font-size: 11px;
