@@ -75,6 +75,7 @@ export default function App() {
   const [chromeAvailable, setChromeAvailable] = useState<boolean | null>(null);
   const [browseGroup, setBrowseGroup] = useState<string | null>(null);
   const [browseState, setBrowseState] = useState("");
+  const [airGestures, setAirGestures] = useState<boolean>(() => localStorage.getItem("recall_air_gestures") === "1");
 
   const [pomo, setPomo] = useState<Pomo>({ seconds: 25 * 60, running: false, mode: "focus" });
 
@@ -181,6 +182,9 @@ export default function App() {
   useEffect(() => {
     document.body.classList.toggle("focus-mode", focusMode);
   }, [focusMode]);
+  useEffect(() => {
+    localStorage.setItem("recall_air_gestures", airGestures ? "1" : "0");
+  }, [airGestures]);
 
   // ── pomodoro ──
   useEffect(() => {
@@ -662,6 +666,7 @@ export default function App() {
               onPomoReset={() => setPomo((p) => ({ seconds: p.mode === "focus" ? 25 * 60 : 5 * 60, running: false, mode: p.mode }))}
               canUndo={(review.undo.length > 0 && review.idx > 0)}
               sessionStats={{ answered: review.answered, again: review.again, good: review.good }}
+              airGestures={airGestures}
             />
           )}
           {view === "browse" && (
@@ -708,6 +713,8 @@ export default function App() {
               onImportBookmarks={importBookmarks}
               onImportArticle={importArticle}
               chromeAvailable={chromeAvailable}
+              airGestures={airGestures}
+              onAirGestures={setAirGestures}
               cardCount={cards.length}
               reviewCount={reviews.length}
             />
@@ -758,6 +765,11 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
           ))}
         </div>
       ))}
+      <div className="hg-label" style={{ marginTop: 8 }}>gestures</div>
+      <div className="help-row"><span className="hr-key"><kbd className="keycap">click</kbd></span><span className="hr-desc">Flip / reveal the card (also reverts)</span></div>
+      <div className="help-row"><span className="hr-key"><kbd className="keycap">drag</kbd></span><span className="hr-desc">Card follows you — release past the glow to grade: ← Again · → Good · ↑ Easy · ↓ Hard (flick to flip before reveal)</span></div>
+      <div className="help-row"><span className="hr-key"><kbd className="keycap">pinch</kbd></span><span className="hr-desc">Camera mode: thumb+index pinch flips the card</span></div>
+      <div className="help-row"><span className="hr-key"><kbd className="keycap">swipe</kbd></span><span className="hr-desc">Camera mode: air-swipe left/right/up/down to grade — same mapping as drag</span></div>
       <div className="hg-label" style={{ marginTop: 8 }}>Tip</div>
       <div style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.6 }}>
         Space to reveal, <Keycap>G</Keycap> for cloze, <Keycap>1–4</Keycap> to grade, <Keycap>⇧G</Keycap> to undo a grade. The grading bar always predicts the FSRS interval before you press.

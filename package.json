@@ -1,7 +1,7 @@
 {
   "name": "revision",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,7 @@
     "widget:install": "./scripts/build-widget.sh && killall Dock"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-dialog": "^2.7.2",

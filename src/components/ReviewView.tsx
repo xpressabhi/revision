@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CardWithState } from "../lib/types";
-import type { Grade } from "../lib/types";
+import type { CardWithState, Grade } from "../lib/types";
 import { cardRetrievability, predictIntervals } from "../lib/fsrs";
 import { MarkdownView } from "../lib/markdown";
+import { dragTransform, useDragGesture, type DragDir } from "../lib/gestures";
+import { HandOverlay } from "./HandOverlay";
 import { Icon, Keycap, fmtPct } from "./ui";
 
 export type Pomo = { seconds: number; running: boolean; mode: "focus" | "break" };
@@ -28,6 +29,7 @@ type Props = {
   onPomoReset: () => void;
   canUndo: boolean;
   sessionStats: { answered: number; again: number; good: number };
+  airGestures: boolean;
 };
 
 export function ReviewView(p: Props) {
@@ -49,6 +51,12 @@ export function ReviewView(p: Props) {
   useEffect(() => {
     if (!p.shown) setHoverZone(null);
   }, [p.shown]);
+
+  const drag = useDragGesture(p.shown, {
+    onTap: () => p.onFlip(),
+    onFlip: () => p.onFlip(),
+    onGrade: (g) => p.onGrade(g),
+  });
 
   if (!card) {
     return (
@@ -105,8 +113,19 @@ export function ReviewView(p: Props) {
       </div>
 
       {/* card stage */}
-      <div className="flip-wrap">
-        <div className={`flip-card ${p.shown ? "flipped" : ""}`} style={{ minHeight: 360 }}>
+      <div className="flip-wrap" {...drag.bind}>
+        <div
+          className={`flip-card ${p.shown ? "flipped" : ""} ${drag.state.phase === "dragging" ? "dragging" : ""} ${drag.state.phase === "flying" ? "flying" : ""}`}
+          style={{ minHeight: 360, ...dragTransform(drag.state, p.shown) }}
+        >
+          {drag.state.phase !== "idle" && p.shown && (
+            <SwipeBadges dir={drag.state.dir} phase={drag.state.phase} />
+          )}
+          {drag.state.phase === "dragging" && !p.shown && (
+            <div className="swipe-reveal">
+              <span>flip to reveal</span>
+            </div>
+          )}
           <div className="flip-face">
             <div className="face-label">
               <span>{card.deck_name} · {card.tags.split(">")[0]}</span>
@@ -119,11 +138,13 @@ export function ReviewView(p: Props) {
               {p.shown ? (
                 <>
                   <Keycap>1–4</Keycap> grade · <Keycap>E</Keycap> edit · <Keycap>S</Keycap> suspend · <Keycap>B</Keycap> bury · <Keycap>⇧G</Keycap> undo
+                  <span className="gesture-hint">· drag card ←→↑↓ to grade</span>
                 </>
               ) : (
                 <>
                   <Keycap>Space</Keycap> reveal answer
                   {hasCloze(card.front) && <><span style={{ opacity: 0.5 }}>·</span><Keycap>G</Keycap> reveal next cloze ({p.revealed}/{clozeBlocks(card.front)})</>}
+                  <span className="gesture-hint">· click card or flick it to flip</span>
                 </>
               )}
             </div>
@@ -142,6 +163,7 @@ export function ReviewView(p: Props) {
             </div>
           </div>
         </div>
+        {p.airGestures && <HandOverlay shown={p.shown} onFlip={p.onFlip} onGrade={(g) => p.onGrade(g)} />}
       </div>
 
       {/* grading bar */}
@@ -193,6 +215,26 @@ export function ReviewView(p: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+const BADGES: { dir: DragDir; grade: number; label: string; cls: string }[] = [
+  { dir: "left", grade: 1, label: "AGAIN", cls: "again" },
+  { dir: "right", grade: 3, label: "GOOD", cls: "good" },
+  { dir: "up", grade: 4, label: "EASY", cls: "easy" },
+  { dir: "down", grade: 2, label: "HARD", cls: "hard" },
+];
+
+function SwipeBadges({ dir, phase }: { dir: DragDir | null; phase: "dragging" | "flying" }) {
+  return (
+    <>
+      {BADGES.map((b) => (
+        <div key={b.dir} className={`swipe-badge ${b.cls} ${b.dir} ${dir === b.dir && phase === "dragging" ? "lit" : ""}`}>
+          <span className="sb-arrow">{b.dir === "left" ? "←" : b.dir === "right" ? "→" : b.dir === "up" ? "↑" : "↓"}</span>
+          {b.label}
+        </div>
+      ))}
+    </>
   );
 }
 

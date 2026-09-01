@@ -21,6 +21,8 @@ type Props = {
   onImportBookmarks: () => Promise<void>;
   onImportArticle: (url: string) => Promise<void>;
   chromeAvailable: boolean | null;
+  airGestures: boolean;
+  onAirGestures: (v: boolean) => void;
   cardCount: number;
   reviewCount: number;
 };
@@ -132,6 +134,17 @@ export function SettingsView(p: Props) {
             <button className="btn btn-sm" onClick={p.onToggleWidget}>Toggle widget</button>
           </div>
           <p style={{ fontSize: 11 }}>Quick capture: <b>⌘⇧K</b> anywhere in the app. The macOS menu-bar widget shows Due/New/Total and can be added from Desktop → Edit Widgets.</p>
+        </div>
+
+        <div className="set-card">
+          <h3>Gestures</h3>
+          <div className="set-row">
+            <span className="muted">Air gestures (camera)</span>
+            <button className={`btn btn-sm ${p.airGestures ? "btn-primary" : ""}`} onClick={() => p.onAirGestures(!p.airGestures)}>
+              {p.airGestures ? "On" : "Off"}
+            </button>
+          </div>
+          <p style={{ fontSize: 11 }}>Hand tracking runs locally on your webcam — nothing is uploaded. Raise your hand: <b>pinch</b> flips the card, <b>air-swipes</b> grade it (← Again · → Good · ↑ Easy · ↓ Hard). macOS asks for camera access once. On desktop you can also drag the card directly or just click to flip.</p>
         </div>
 
         <div className="set-card">
