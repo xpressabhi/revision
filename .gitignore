@@ -30,3 +30,4 @@ seed-snippet.ts
 src-tauri/RevisionWidget/build/
 src-tauri/RevisionWidget/*.xcodeproj
 src-tauri/RevisionWidget/*.xcworkspace
+/.playwright-mcp

@@ -17,6 +17,7 @@ struct DeckStat {
 
 #[tauri::command]
 fn update_tray(app: AppHandle, due: i32, new: i32, total: i32, decks: Vec<DeckStat>) -> Result<(), String> {
+    println!("[boot] frontend mounted — due={} new={} total={}", due, new, total);
     let tray = app.tray_by_id("main").ok_or("tray not found")?;
     let title = format!("Revision — Due {} • New {} • Total {}", due, new, total);
     let header = MenuItem::with_id(&app, "header", title, false, None::<&str>).map_err(|e| e.to_string())?;
@@ -58,6 +59,11 @@ fn update_tray(app: AppHandle, due: i32, new: i32, total: i32, decks: Vec<DeckSt
     let _ = tray.set_tooltip(Some(tooltip));
     let _ = tray.set_title(Some(format!("Due {}", due)));
     Ok(())
+}
+
+#[tauri::command]
+fn debug_log(msg: String) {
+    println!("[webview] {}", msg);
 }
 
 #[tauri::command]
@@ -171,7 +177,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![greet, update_tray, toggle_widget, show_widget, hide_widget])
+        .invoke_handler(tauri::generate_handler![greet, update_tray, toggle_widget, show_widget, hide_widget, debug_log])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

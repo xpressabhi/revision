@@ -2,7 +2,7 @@
 // Mirrors the SQLite schema but uses JSON in localStorage
 
 import type { CardState, CardWithState, Deck, DeckStats } from "./types";
-import { DEFAULT_EASE } from "./srs";
+import { DEFAULT_EASE, DEFAULT_STABILITY, DEFAULT_DIFFICULTY } from "./fsrs";
 
 const LS_DECKS = "revision_decks";
 const LS_CARDS = "revision_cards";
@@ -127,11 +127,31 @@ export async function browserInitDb() {
         ease: DEFAULT_EASE,
         reps: 0,
         state: "new",
+        stability: DEFAULT_STABILITY,
+        difficulty: DEFAULT_DIFFICULTY,
         updated_at: nowIso(),
       });
       added = true;
     }
   }
+  // FSRS migration for existing installs
+  let migrated = false;
+  for (const s of states as unknown as (CardState & { stability?: number; difficulty?: number })[]) {
+    if (typeof s.stability !== "number") {
+      s.stability = DEFAULT_STABILITY;
+      migrated = true;
+    }
+    if (typeof s.difficulty !== "number") {
+      s.difficulty = DEFAULT_DIFFICULTY;
+      migrated = true;
+    }
+    // Legacy SM-2: review cards with no stability get a sane backfill
+    if ((typeof s.stability === "number" && s.stability <= 0 || s.stability === DEFAULT_STABILITY) && s.state === "review" && (s.interval ?? 0) > 0) {
+      s.stability = Math.max(1, s.interval ?? 1);
+      migrated = true;
+    }
+  }
+  if (migrated) save(LS_STATES, states);
   if (added) save(LS_STATES, states);
   // Ensure arrays exist
   save(LS_CARDS, cards);
@@ -170,7 +190,7 @@ export async function browserCreateCard(deckId: number, front: string, back: str
   const id = nextId("cards");
   const now = nowIso();
   cards.push({ id, deck_id: deckId, front: front.trim(), back: back.trim(), tags: tags.trim(), created_at: now, updated_at: now });
-  states.push({ card_id: id, due_at: now, interval: 0, ease: DEFAULT_EASE, reps: 0, state: "new", updated_at: now });
+  states.push({ card_id: id, due_at: now, interval: 0, ease: DEFAULT_EASE, reps: 0, state: "new", stability: DEFAULT_STABILITY, difficulty: DEFAULT_DIFFICULTY, updated_at: now });
   save(LS_CARDS, cards);
   save(LS_STATES, states);
   return id;
@@ -204,7 +224,7 @@ export async function browserGetAllCardsWithState(opts?: { deckId?: number | nul
     .map((c) => {
       const s = stateMap.get(c.id);
       if (!s) return null;
-      return { ...c, deck_name: deckMap.get(c.deck_id) ?? "", state: s.state, due_at: s.due_at, interval: s.interval, ease: s.ease, reps: s.reps } as CardWithState;
+      return { ...c, deck_name: deckMap.get(c.deck_id) ?? "", state: s.state, due_at: s.due_at, interval: s.interval, ease: s.ease, reps: s.reps, stability: s.stability ?? DEFAULT_STABILITY, difficulty: s.difficulty ?? DEFAULT_DIFFICULTY } as CardWithState;
     })
     .filter(Boolean) as CardWithState[];
 
@@ -253,10 +273,19 @@ export async function browserUpdateCardState(state: CardState) {
 }
 
 export async function browserLogReview(cardId: number, grade: number) {
+  return browserLogReviewAt(cardId, grade, new Date());
+}
+
+export async function browserLogReviewAt(cardId: number, grade: number, when: Date) {
   const reviews = load<ReviewRow[]>(LS_REVIEWS, []);
   const id = nextId("reviews");
-  reviews.push({ id, card_id: cardId, grade, created_at: nowIso() });
+  reviews.push({ id, card_id: cardId, grade, created_at: when.toISOString() });
   save(LS_REVIEWS, reviews);
+}
+
+export async function browserGetReviews(): Promise<ReviewRow[]> {
+  await browserInitDb();
+  return load<ReviewRow[]>(LS_REVIEWS, []);
 }
 
 export async function browserBulkCreateCards(rows: { deckName: string; front: string; back: string; tags: string }[]): Promise<number> {

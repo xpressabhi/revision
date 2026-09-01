@@ -1,7 +1,7 @@
 {
   "name": "revision",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,7 @@
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-sql": "^2.4.0",
+    "katex": "^0.18.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

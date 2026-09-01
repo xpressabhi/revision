@@ -1,6 +1,6 @@
 // @ts-nocheck
-import type { CardState, CardWithState, Deck, DeckStats } from "./types";
-import { DEFAULT_EASE } from "./srs";
+import type { CardState, CardWithState, Deck, DeckStats, ReviewRow } from "./types";
+import { DEFAULT_EASE, DEFAULT_STABILITY, DEFAULT_DIFFICULTY } from "./fsrs";
 import {
   browserInitDb,
   browserGetDecks,
@@ -14,6 +14,8 @@ import {
   browserGetDeckStats,
   browserUpdateCardState,
   browserLogReview,
+  browserLogReviewAt,
+  browserGetReviews,
   browserBulkCreateCards,
 } from "./db.browser";
 
@@ -114,9 +116,17 @@ export async function initDb() {
         ease REAL NOT NULL DEFAULT ${DEFAULT_EASE},
         reps INTEGER NOT NULL DEFAULT 0,
         state TEXT NOT NULL DEFAULT 'new',
+        stability REAL NOT NULL DEFAULT ${DEFAULT_STABILITY},
+        difficulty REAL NOT NULL DEFAULT ${DEFAULT_DIFFICULTY},
         updated_at TEXT NOT NULL
       );
     `);
+    // FSRS migration for existing installs
+    const stateCols = await db.select<{ name: string }[]>("PRAGMA table_info(card_state)");
+    const hasStab = stateCols.some((c) => c.name === "stability");
+    const hasDiff = stateCols.some((c) => c.name === "difficulty");
+    if (!hasStab) await db.execute(`ALTER TABLE card_state ADD COLUMN stability REAL NOT NULL DEFAULT ${DEFAULT_STABILITY}`);
+    if (!hasDiff) await db.execute(`ALTER TABLE card_state ADD COLUMN difficulty REAL NOT NULL DEFAULT ${DEFAULT_DIFFICULTY}`);
     await db.execute(`
       CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,9 +155,14 @@ export async function initDb() {
       }
     }
     await db.execute(
-      `INSERT OR IGNORE INTO card_state (card_id, due_at, interval, ease, reps, state, updated_at)
-       SELECT id, updated_at, 0, ${DEFAULT_EASE}, 0, 'new', updated_at FROM cards
+      `INSERT OR IGNORE INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at)
+       SELECT id, updated_at, 0, ${DEFAULT_EASE}, 0, 'new', ${DEFAULT_STABILITY}, ${DEFAULT_DIFFICULTY}, updated_at FROM cards
        WHERE id NOT IN (SELECT card_id FROM card_state)`
+    );
+    // FSRS migration: legacy SM-2 cards have stability 0 — backfill from their interval
+    // so predictions are sane instead of "due now forever".
+    await db.execute(
+      `UPDATE card_state SET stability = MAX(1.0, interval) WHERE state = 'review' AND stability <= 0`
     );
   } catch (e) {
     console.warn("Tauri DB failed, falling back to browser storage", e);
@@ -202,8 +217,8 @@ export async function createCard(
     );
     const cardId = (res as unknown as { lastInsertId: number }).lastInsertId;
     await db.execute(
-      "INSERT INTO card_state (card_id, due_at, interval, ease, reps, state, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-      [cardId, now, 0, DEFAULT_EASE, 0, "new", now]
+      "INSERT INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      [cardId, now, 0, DEFAULT_EASE, 0, "new", DEFAULT_STABILITY, DEFAULT_DIFFICULTY, now]
     );
     return cardId;
   } catch {
@@ -268,7 +283,7 @@ export async function getAllCardsWithState(opts?: {
     }
     const whereCl = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const sql = `
-      SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps
+      SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
       FROM cards c
       JOIN decks d ON d.id = c.deck_id
       JOIN card_state cs ON cs.card_id = c.id
@@ -287,14 +302,14 @@ export async function getDueCards(limitNew = 20): Promise<CardWithState[]> {
     const db = await getDb();
     const now = new Date().toISOString();
     const due = await db.select<CardWithState[]>(
-      `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps
+      `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
        FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
        WHERE cs.due_at <= $1 AND cs.state != 'new'
        ORDER BY cs.due_at ASC LIMIT 200`,
       [now]
     );
     const newCards = await db.select<CardWithState[]>(
-      `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps
+      `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
        FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
        WHERE cs.state='new'
        ORDER BY c.created_at ASC LIMIT $1`,
@@ -346,8 +361,8 @@ export async function updateCardState(state: CardState): Promise<void> {
   try {
     const db = await getDb();
     await db.execute(
-      "UPDATE card_state SET due_at=$1, interval=$2, ease=$3, reps=$4, state=$5, updated_at=$6 WHERE card_id=$7",
-      [state.due_at, state.interval, state.ease, state.reps, state.state, state.updated_at, state.card_id]
+      "UPDATE card_state SET due_at=$1, interval=$2, ease=$3, reps=$4, state=$5, stability=$6, difficulty=$7, updated_at=$8 WHERE card_id=$9",
+      [state.due_at, state.interval, state.ease, state.reps, state.state, state.stability, state.difficulty, state.updated_at, state.card_id]
     );
   } catch {
     return browserUpdateCardState(state);
@@ -355,13 +370,26 @@ export async function updateCardState(state: CardState): Promise<void> {
 }
 
 export async function logReview(cardId: number, grade: number): Promise<void> {
-  if (!isTauri()) return browserLogReview(cardId, grade);
+  return logReviewAt(cardId, grade, new Date());
+}
+
+export async function logReviewAt(cardId: number, grade: number, when: Date): Promise<void> {
+  if (!isTauri()) return browserLogReviewAt(cardId, grade, when);
   try {
     const db = await getDb();
-    const now = new Date().toISOString();
-    await db.execute("INSERT INTO reviews (card_id, grade, created_at) VALUES ($1,$2,$3)", [cardId, grade, now]);
+    await db.execute("INSERT INTO reviews (card_id, grade, created_at) VALUES ($1,$2,$3)", [cardId, grade, when.toISOString()]);
   } catch {
-    return browserLogReview(cardId, grade);
+    return browserLogReviewAt(cardId, grade, when);
+  }
+}
+
+export async function getReviews(): Promise<ReviewRow[]> {
+  if (!isTauri()) return browserGetReviews();
+  try {
+    const db = await getDb();
+    return db.select<ReviewRow[]>("SELECT id, card_id, grade, created_at FROM reviews ORDER BY created_at ASC");
+  } catch {
+    return browserGetReviews();
   }
 }
 

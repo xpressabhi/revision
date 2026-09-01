@@ -3,90 +3,75 @@
 [![Release](https://img.shields.io/github/v/release/xpressabhi/revision?label=latest%20release&style=flat-square)](https://github.com/xpressabhi/revision/releases/latest)
 [![Build](https://github.com/xpressabhi/revision/actions/workflows/release.yml/badge.svg)](https://github.com/xpressabhi/revision/actions/workflows/release.yml)
 
-Local-first desktop app for principal-level interview prep. Spaced repetition for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral**.
+Local-first desktop app for principal-level interview prep. **FSRS-5 spaced repetition** for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral** — redesigned as a keyboard-first, glassmorphic macOS app.
 
 > Works fully offline. Single SQLite file `revision.db` (Tauri) or `localStorage` (browser preview). No cloud, no account.
 
-### Download — Windows & macOS
+---
 
-> **Latest release:** https://github.com/xpressabhi/revision/releases/latest — download the installer for your OS below. No sign-in required.
+### v0.2.0 — "Recall" redesign
 
-| Platform | Installer | Direct link (latest) |
-|---|---|---|
-| **macOS Apple Silicon** | `Revision_0.1.0_aarch64.dmg` | [Download .dmg (arm64)](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_aarch64.dmg) |
-| **macOS Intel** | `Revision_0.1.0_x64.dmg` | [Download .dmg (Intel)](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_x64.dmg) |
-| **Windows 10/11** | `Revision_0.1.0_x64-setup.exe` (NSIS) | [Download .exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_x64-setup.exe) |
-| **Windows 10/11** | `Revision_0.1.0_x64_en-US.msi` (MSI) | [Download .msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.1.0_x64_en-US.msi) |
-
-**How to install:**
-- **macOS:** Open the `.dmg` → drag `Revision` to `Applications` → first launch right-click → Open (unsigned build).
-- **Windows:** Run the `.exe` (or `.msi`) → follow installer → launch from Start Menu.
-
-> If a direct link 404s, the release hasn't been published yet — use the [Releases page](https://github.com/xpressabhi/revision/releases) or the [Actions artifacts](https://github.com/xpressabhi/revision/actions/workflows/release.yml) (every push to `main` builds a `.dmg` + `.exe` you can download without a release).
-
-<details>
-<summary><strong>For maintainers: create a new release (triggers .exe + .dmg build)</strong></summary>
-
-```bash
-# bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml together
-npm version patch   # or minor/major — updates package.json + creates git tag v0.1.x
-# make sure tauri.conf.json and Cargo.toml version match package.json, then:
-git push origin main --tags
-# or manually:
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Tag push triggers `.github/workflows/release.yml` on `macos-latest` + `windows-latest`:
-- builds `Revision_0.1.0_aarch64.dmg` / `Revision_0.1.0_x64.dmg` and `Revision_0.1.0_x64-setup.exe` / `.msi`
-- publishes them to `https://github.com/xpressabhi/revision/releases/tag/v0.1.0`
-- every push to `main` also builds and uploads the same bundles as **Actions artifacts** (download from the Actions tab without a release)
-
-Local build without CI:
-```bash
-npm run tauri build   # -> src-tauri/target/release/bundle/dmg/*.dmg  and  nsis/*.exe / msi/*.msi (platform-specific)
-
-# On macOS 27 / Xcode 27 beta, stable Rust 1.98 fails with:
-#   "mis-aligned LINKEDIT string pool" for sqlx_macros.
-# Use nightly (fixed in 1.100+):
-#   rustup toolchain install nightly
-#   rustup default nightly   # or: rustup override set nightly
-#   npm run tauri build
-# GitHub Actions already uses nightly for macOS, so CI is unaffected.
-```
-</details>
+- **FSRS-5 scheduler** (Free Spaced Repetition Scheduler): stability/difficulty/retrievability per card, live interval predictions on the grading bar (`Again 10m · Hard 1d · Good 3d · Easy 15d`), desired-retention control (80–95%), per-grade projection curves in the inspector.
+- **3-pane macOS glass shell**: collapsible translucent sidebar (decks / smart filters / tag graph), central canvas, collapsible FSRS+AI inspector. Vibrancy materials, hairline borders, layered shadows, 4 themes (Slate & Emerald / OLED & Amber, dark + light each, ⌘⇧T cycles).
+- **Command bar (⌘K)**: fuzzy search across decks, cards, tags and actions; keyboard-first everything (Space reveal, 1–4 grade, G cloze reveal, H hints, ⇧G undo, ⌃→ skip, S/B suspend/bury, ⌘↵ end).
+- **Cloze deletions + LaTeX**: Anki-style `{{c1::answer}}` with progressive per-block reveal (G), KaTeX rendering for `$…$` and `$$…$$` in cards and editor preview.
+- **Dashboards & analytics**: GitHub-style 53-week streak heatmap, FSRS retention forecast, review-queue forecast, deck cards with progress rings, grade distribution, memory-load charts.
+- **Quick capture (⌘⇧K)** and in-app **AI card generator drawer** (on-device, no API key): paste text → Q&A / cloze / flashcard variants.
+- **Demo content**: "Load demo content" in Settings seeds 4 topic decks + ~90 days of review history so the heatmap and analytics are alive on first run.
 
 ### Features
-- 6 pre-seeded decks, generic Front/Back cards with markdown + code blocks + tags
-- Spaced repetition via SM-2: Again (10m) / Good (1d) / Easy (3d+) — stored in `card_state`
-- Review queue: due + up to 20 new cards, keyboard `Space` to reveal, `1` `2` `3` to grade
-- Browse: search front/back/tags, filter by deck/state, edit/delete
+- Single-deck data model; topic groups are tag trees (`spanish>vocab`, `dsa>patterns`, …) rendered as decks in the sidebar
+- FSRS review queue: learning (10m step) → due → new (capped 20/session), bury/suspend, undo grade
+- Browse: search front/back/tags, filter by state and group, edit/delete inline
 - Import/Export CSV: `deck,front,back,tags` — drag or button
-- Seed 13 starter cards covering all pillars
-- SQLite: `revision.db` in app data dir (Tauri) via `tauri-plugin-sql`, WAL + FK enabled
+- Seed 13 starter cards on first run
+- SQLite: `revision.db` (Tauri) via `tauri-plugin-sql`, WAL + FK enabled
+- Tray: `Due X • New Y` + Start Review / Show / Toggle Widget / Quit
+- WidgetKit desktop widget (Due/New/Total), launch-at-login (autostart plugin)
 
 ### Stack
-- **Tauri 2** + **React 19** + **TypeScript** + **Vite 7**
+- **Tauri 2** + **React 19** + **TypeScript** + **Vite 7** + **KaTeX**
 - **Rust** backend: `tauri-plugin-sql` (sqlite), `dialog`, `fs`
-- Frontend DB abstraction: `src/lib/db.ts` — auto-falls back to `localStorage` when run as plain web (`npm run dev`) so you can preview without Tauri
-- Styling: custom CSS (no Tailwind), responsive, dark sidebar
+- Frontend DB abstraction: `src/lib/db.ts` — auto-falls back to `localStorage` when run as plain web (`npm run dev`)
+- Styling: custom design system in `src/App.css` (CSS variables, 4 themes, 3 density scalars, reduced-motion support)
 
 ### Run (from repo root `revision/`)
 ```bash
 npm install
-# Desktop (Tauri) — recommended
-npm run tauri dev        # opens native window, uses SQLite revision.db
+# Desktop (Tauri) — recommended (macOS overlay titlebar + vibrancy)
+npm run tauri dev
 
 # Or preview in browser only (uses localStorage, no Rust needed)
-npm run dev              # http://localhost:1420 — good for UI iteration
+npm run dev              # http://localhost:1420
 
 # Build native binary
-npm run tauri build      # .dmg / .exe / .AppImage in src-tauri/target/release/bundle/
+npm run tauri build      # .dmg / .exe in src-tauri/target/release/bundle/
 npm run build            # web build only -> dist/
 ```
 
+### Keyboard map (core)
+| Keys | Action |
+|---|---|
+| `⌘K` | Command bar (decks, cards, actions) |
+| `⌘⇧K` | Quick capture |
+| `Space` / `↵` | Reveal answer (press again to grade Good) |
+| `1 2 3 4` | Grade: Again · Hard · Good · Easy (FSRS predictions show live) |
+| `G` | Reveal next cloze block |
+| `H` | Next AI hint (inspector) |
+| `⇧G` | Undo last grade |
+| `⌃→` | Skip card |
+| `E` / `S` / `B` | Edit / Suspend / Bury |
+| `⌘1–5` | Dashboard · Browse · Review · Analytics · Settings |
+| `⌘S` | Sidebar: full → rail → hidden |
+| `⌥⌘I` | Toggle inspector |
+| `⌘⇧F` | Focus mode |
+| `⌘⇧T` | Cycle theme |
+| `⌘⌃1–3` | Density: relaxed / standard / compact |
+| `⌘,` | Settings |
+| `/` | Keyboard-map overlay |
+
 ### DB Location
-- Tauri: app data dir — e.g. `~/Library/Application Support/com.revision.app/revision.db` (macOS). Portable: `Export CSV` to backup.
+- Tauri: app data dir — e.g. `~/Library/Application Support/com.revision.app/revision.db` (macOS). Use "Export CSV" to back up.
 - Browser: `localStorage` keys `revision_cards`, `revision_states`, etc. Clear site data to reset.
 
 ### CSV Format
@@ -94,46 +79,46 @@ Header optional but recommended:
 ```
 deck,front,back,tags
 "DSA / LeetCode","Two Sum — Pattern?","**Pattern:** Hash Map ...","array, hashmap"
-"Behavioral","Best project — STAR","S: ... T: ...","STAR, leadership"
 ```
-Image paste stores as data URL inside `back`.
 
 ### Project Layout
 ```
 revision/
   src/
-    App.tsx                 # 3 views: Today / Review / Browse + modals + tray/widget sync
+    App.tsx                 # shell: 3-pane layout, keyboard master, review state machine
+    App.css                 # design system: tokens (4 themes), components, motion
     Widget.tsx              # 340×190 transparent widget window (Due/New/Total)
-    lib/db.ts               # SQLite + localStorage fallback + clear/dedup
-    lib/db.browser.ts       # localStorage impl
-    lib/srs.ts              # SM-2 nextState()
-    lib/types.ts, csv.ts, seed.ts (SEED_CARDS 13 + BLIND75_SEED 75), markdown.tsx (links)
-    App.css                 # design system + widget
+    components/             # Sidebar, CommandBar, Inspector, Dashboard, ReviewView,
+                            # EditorModal, BrowseView, AnalyticsView, SettingsView,
+                            # QuickCapture, Toast, ui (icons/ring/keycaps)
+    lib/
+      fsrs.ts               # FSRS-5 scheduler + interval/retrievability predictions
+      db.ts / db.browser.ts # SQLite + localStorage fallback (with FSRS migration)
+      markdown.tsx / katex.ts  # cloze + KaTeX-aware markdown renderer
+      demo.ts               # deterministic demo content + review history
+      ai.ts                 # on-device hint + card generators (no API)
+      derive.ts             # tag tree, queues, heatmap, streaks, forecasts
+      hotkeys.ts / search.ts # shortcut matrix + fuzzy matching
+      types.ts, csv.ts, seed.ts, article.ts, bookmarks.ts
   src-tauri/
-    Cargo.toml, tauri.conf.json (main + widget windows), capabilities/default.json
+    Cargo.toml, tauri.conf.json (main + widget windows, overlay titlebar)
     RevisionWidget/         # WidgetKit desktop widget (Swift, project.yml via xcodegen)
-      RevisionWidget/RevisionWidget.swift  # TimelineProvider reads revision.db, shows Due/New
   public/blind75.csv        # Blind 75 import file
-  scripts/install-to-applications.sh  # builds + embeds widget + copies to /Applications
-  scripts/build-widget.sh             # xcodegen + xcodebuild widget appex
 ```
 
 ### Tray, Widgets & Autostart (no terminal)
-- **Tray (always visible):** Shows `Due X • New Y` in tooltip + `Due X` title, menu header `Revision — Due X • New Y • Total Z` with per-deck breakdown, actions `▶ Start Review` (opens Review), `Show Revision`, `Toggle Widget`, `Quit`. Live-updates via `update_tray` on every `getDeckStats`.
-- **In-app widget window:** `340×190` transparent always-on-top (`src-tauri/tauri.conf.json` `widget` window, `src/Widget.tsx`) — shows `Due/New/Total` KPIs + deck due list + `Review` button. Toggle via tray `Toggle Widget` or in-app `◫ Widget` (Today header + sidebar foot `Toggle Widget`), `×` hides. Drag header to move.
-- **macOS Desktop Widget (WidgetKit):** Native widget addable alongside Stocks/Clock/Battery via `Desktop → right-click → Edit Widgets → search "Revision" → Add "Due Today"` (small/medium). Reads `~/Library/Application Support/com.revision.app/revision.db` directly via SQLite3, shows `Due/New/Total` + 4 decks, refreshes every 15 min. Tap widget opens `Revision.app`. Built from `src-tauri/RevisionWidget/` (Swift + WidgetKit, `project.yml` via `xcodegen`), embedded as `Revision.app/Contents/PlugIns/RevisionWidget.appex` on `tauri:build:install` (also `npm run widget:build`).
-- **Launch at login:** Sidebar foot toggle `Launch at login` uses `tauri-plugin-autostart` (macOS LaunchAgent).
+- **Tray (always visible):** `Due X • New Y` tooltip, menu with per-deck breakdown, `▶ Start Review`, `Show Revision`, `Toggle Widget`, `Quit`. Live-updates on every stats refresh.
+- **In-app widget window:** `340×190` transparent always-on-top; toggle from tray or Settings.
+- **macOS Desktop Widget (WidgetKit):** Desktop → right-click → Edit Widgets → search "Revision" → add "Due Today". Reads `revision.db` directly.
+- **Launch at login:** Settings toggle (macOS LaunchAgent).
 
 ### Updates (local only — no GitHub)
-- Rebuild locally and auto-install to `/Applications`:
-  ```bash
-  npm run tauri:build:install   # builds (debug) then copies .app to /Applications, embeds widget, and relaunches (tray/widget refresh)
-  # or manually: ./scripts/install-to-applications.sh
-  ```
-  Script quits running app, `cp -R` new bundle, clears quarantine, `open`s it — tray icon/menu/widget update on next launch. No remote updater (removed `tauri-plugin-updater` — personal use only).
+```bash
+npm run tauri:build:install   # builds (debug), copies .app to /Applications, embeds widget, relaunches
+```
 
 ### Tauri Setup
-Requires Rust 1.70+ and system deps (Xcode CLI tools on macOS). No extra config — `tauri-plugin-sql` with `sqlite` feature already added.
+Requires Rust 1.70+ and system deps (Xcode CLI tools on macOS).
 
 ### License
 MIT — personal use.

@@ -22,6 +22,10 @@ export type CardState = {
   ease: number;
   reps: number;
   state: "new" | "learning" | "review";
+  /** FSRS stability (days) */
+  stability: number;
+  /** FSRS difficulty 1..10 */
+  difficulty: number;
   updated_at: string;
 };
 
@@ -31,9 +35,12 @@ export type CardWithState = Card & {
   interval: number;
   ease: number;
   reps: number;
+  stability: number;
+  difficulty: number;
 };
 
-export type Grade = 1 | 3 | 4; // Again, Good, Easy
+/** FSRS ratings: 1 Again · 2 Hard · 3 Good · 4 Easy */
+export type Grade = 1 | 2 | 3 | 4;
 
 export type DeckStats = {
   deck_id: number;
@@ -44,3 +51,7 @@ export type DeckStats = {
   learning: number;
   review: number;
 };
+
+export type ReviewRow = { id: number; card_id: number; grade: number; created_at: string };
+
+export type View = "dashboard" | "browse" | "review" | "analytics" | "settings";
