@@ -30,6 +30,9 @@ type Props = {
   canUndo: boolean;
   sessionStats: { answered: number; again: number; good: number };
   airGestures: boolean;
+  stale: boolean;
+  onResume: () => void;
+  onRestart: () => void;
 };
 
 export function ReviewView(p: Props) {
@@ -53,10 +56,16 @@ export function ReviewView(p: Props) {
   }, [p.shown]);
 
   const drag = useDragGesture(p.shown, {
-    onTap: () => p.onFlip(),
-    onFlip: () => p.onFlip(),
-    onGrade: (g) => p.onGrade(g),
+    onTap: () => actNow(() => p.onFlip()),
+    onFlip: () => actNow(() => p.onFlip()),
+    onGrade: (g) => actNow(() => p.onGrade(g)),
   });
+
+  const act = (fn: () => void) => () => (p.stale ? p.onResume() : fn());
+  const actNow = (fn: () => void) => {
+    if (p.stale) p.onResume();
+    else fn();
+  };
 
   if (!card) {
     return (
@@ -115,6 +124,17 @@ export function ReviewView(p: Props) {
       {/* card stage */}
       <div className="flip-wrap" {...drag.bind}>
         <GesturePad air={p.airGestures} shown={p.shown} onGrade={(g) => p.onGrade(g)} />
+        {p.stale && (
+          <div className="stale-banner" onClick={p.onResume}>
+            <div className="stale-title"><Icon name="clock" size={14} /> Stepped away?</div>
+            <div className="stale-sub">The answer is hidden — recall it fresh. Your queue and progress are untouched until you resume.</div>
+            <div className="stale-actions">
+              <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); p.onResume(); }}>Resume</button>
+              <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); p.onRestart(); }}>Restart queue</button>
+              <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); p.onEnd(); }}>End</button>
+            </div>
+          </div>
+        )}
         <div
           className={`flip-card ${p.shown ? "flipped" : ""} ${drag.state.phase === "dragging" ? "dragging" : ""} ${drag.state.phase === "flying" ? "flying" : ""}`}
           style={{ minHeight: 360, ...dragTransform(drag.state, p.shown) }}
@@ -191,7 +211,7 @@ export function ReviewView(p: Props) {
               <button
                 key={z.g}
                 className={`grade-zone ${z.cls}`}
-                onClick={() => p.onGrade(z.g)}
+                onClick={act(() => p.onGrade(z.g))}
                 onMouseEnter={() => setHoverZone(z.g)}
                 onMouseLeave={() => setHoverZone(null)}
               >
@@ -205,9 +225,9 @@ export function ReviewView(p: Props) {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
           <div style={{ display: "flex", gap: 14 }}>
-            <button className="btn btn-ghost btn-sm" onClick={p.onUndo} disabled={!p.canUndo} title="Undo last grade (⇧G)"><Icon name="undo" size={12} /> Undo</button>
-            <button className="btn btn-ghost btn-sm" onClick={p.onSkip} title="Skip (⌃→)"><Icon name="chevron" size={12} className="rv-skip" /> Skip</button>
-            <button className="btn btn-ghost btn-sm" onClick={p.onEdit} title="Edit (E)"><Icon name="card" size={12} /> Edit</button>
+            <button className="btn btn-ghost btn-sm" onClick={act(p.onUndo)} disabled={!p.canUndo} title="Undo last grade (⇧G)"><Icon name="undo" size={12} /> Undo</button>
+            <button className="btn btn-ghost btn-sm" onClick={act(p.onSkip)} title="Skip (⌃→)"><Icon name="chevron" size={12} className="rv-skip" /> Skip</button>
+            <button className="btn btn-ghost btn-sm" onClick={act(p.onEdit)} title="Edit (E)"><Icon name="card" size={12} /> Edit</button>
           </div>
           <div className="session-meta" style={{ fontSize: 10.5 }}>
             <button className="btn btn-ghost btn-sm" onClick={p.onBury} title="Bury until next session (B)">Bury</button>

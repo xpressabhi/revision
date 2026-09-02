@@ -21,6 +21,7 @@ import { SEED_CARDS } from "./lib/seed";
 import { loadDemoData } from "./lib/demo";
 import { buildTagTree, lastReviewMap, scopeCards, streakLength, type StudyScope } from "./lib/derive";
 import { matchesChord, scopeKeys } from "./lib/hotkeys";
+import { AUTO_END_DEFAULT_MIN, isAutoEnd, isStale, SWEEP_MS, STALE_DEFAULT, STALE_OPTIONS, type StaleThreshold } from "./lib/session";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
@@ -76,6 +77,11 @@ export default function App() {
   const [browseGroup, setBrowseGroup] = useState<string | null>(null);
   const [browseState, setBrowseState] = useState("");
   const [airGestures, setAirGestures] = useState<boolean>(() => localStorage.getItem("recall_air_gestures") === "1");
+  const [staleMin, setStaleMin] = useState<StaleThreshold>(() => {
+    const v = Number(localStorage.getItem("recall_stale_min") ?? STALE_DEFAULT);
+    return (STALE_OPTIONS.some((o) => o.value === v) ? v : STALE_DEFAULT) as StaleThreshold;
+  });
+  const [autoEndOn, setAutoEndOn] = useState<boolean>(() => localStorage.getItem("recall_stale_autoend") !== "0");
 
   const [pomo, setPomo] = useState<Pomo>({ seconds: 25 * 60, running: false, mode: "focus" });
 
@@ -91,9 +97,11 @@ export default function App() {
     good: number;
     buried: Set<number>;
     undo: { cardId: number; prev: CardState }[];
+    stale: boolean;
   };
   const [review, setReview] = useState<ReviewState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastTouchRef = useRef(Date.now());
 
   const lastReview = useMemo(() => lastReviewMap(reviews), [reviews]);
   const groups = useMemo(() => buildTagTree(cards, lastReview), [cards, lastReview]);
@@ -185,6 +193,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("recall_air_gestures", airGestures ? "1" : "0");
   }, [airGestures]);
+  useEffect(() => {
+    localStorage.setItem("recall_stale_min", String(staleMin));
+  }, [staleMin]);
+  useEffect(() => {
+    localStorage.setItem("recall_stale_autoend", autoEndOn ? "1" : "0");
+  }, [autoEndOn]);
 
   // ── pomodoro ──
   useEffect(() => {
@@ -284,6 +298,11 @@ export default function App() {
 
       // review scope
       if (view === "review" && review && review.queue.length) {
+        touch();
+        if (review.stale) {
+          resume();
+          return;
+        }
         const card = review.queue[review.idx];
         if (!card) return;
         if ((matchesChord(e, "space") || matchesChord(e, "enter")) && !typing) {
@@ -347,6 +366,7 @@ export default function App() {
         toast("Queue clear — nothing due in this scope", "info");
         return current;
       }
+      lastTouchRef.current = Date.now();
       return {
         scope,
         queue,
@@ -359,6 +379,7 @@ export default function App() {
         good: 0,
         buried: new Set(),
         undo: [],
+        stale: false,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -370,6 +391,10 @@ export default function App() {
   };
 
   const grade = async (g: Grade) => {
+    if (review?.stale) {
+      resume();
+      return;
+    }
     const r = review;
     if (!r) return;
     const card = r.queue[r.idx];
@@ -449,6 +474,92 @@ export default function App() {
     setReview(null);
     setView("dashboard");
   };
+
+  // ═══ activity-aware sessions (step-away handling) ═══
+  const reviewRef = useRef(review);
+  reviewRef.current = review;
+
+  const touch = useCallback(() => {
+    lastTouchRef.current = Date.now();
+  }, []);
+
+  const resume = useCallback(() => {
+    lastTouchRef.current = Date.now();
+    setReview((r) => (r && r.stale ? { ...r, stale: false } : r));
+  }, []);
+
+  const flipCard = useCallback(() => {
+    if (reviewRef.current?.stale) {
+      resume();
+      return;
+    }
+    lastTouchRef.current = Date.now();
+    setReview((r) => (r ? { ...r, shown: !r.shown } : r));
+  }, [resume]);
+
+  const markStale = useCallback(() => {
+    setReview((r) => {
+      if (!r || r.stale || r.idx >= r.queue.length) return r;
+      setPomo((p) => (p.running ? { ...p, running: false } : p));
+      return { ...r, stale: true, shown: false, revealed: 0, hintLevel: 0 };
+    });
+  }, []);
+
+  const endStaleSession = useCallback(() => {
+    toast("Stepped away — session ended, queue re-derived on next start", "info");
+    endReview();
+  }, [toast]);
+
+  useEffect(() => {
+    const sweep = () => {
+      const r = reviewRef.current;
+      if (!r || r.idx >= r.queue.length) return;
+      const now = Date.now();
+      const away = now - lastTouchRef.current;
+      if (r.stale) {
+        if (autoEndOn && isAutoEnd(lastTouchRef.current, now, AUTO_END_DEFAULT_MIN)) endStaleSession();
+        return;
+      }
+      if (isStale(lastTouchRef.current, now, staleMin) && away >= staleMin * 60_000) markStale();
+    };
+    const id = window.setInterval(sweep, SWEEP_MS);
+    return () => window.clearInterval(id);
+  }, [staleMin, autoEndOn, markStale, endStaleSession]);
+
+  useEffect(() => {
+    if (!review) return;
+    const down = () => touch();
+    const move = () => {
+      lastTouchRef.current = Date.now();
+    };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("pointermove", move, true);
+    return () => {
+      document.removeEventListener("pointerdown", down, true);
+      document.removeEventListener("pointermove", move, true);
+    };
+  }, [review, touch]);
+
+  useEffect(() => {
+    const awayRef = { at: 0 };
+    const onHide = () => {
+      awayRef.at = Date.now();
+    };
+    const onShow = () => {
+      const away = awayRef.at ? Date.now() - awayRef.at : 0;
+      awayRef.at = 0;
+      if (away >= staleMin * 60_000) markStale();
+    };
+    const onVis = () => (document.hidden ? onHide() : onShow());
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onHide);
+    window.addEventListener("focus", onShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onHide);
+      window.removeEventListener("focus", onShow);
+    };
+  }, [staleMin, markStale]);
 
   // ═══ editor save ═══
   const saveCard = async (front: string, back: string, tags: string) => {
@@ -652,7 +763,7 @@ export default function App() {
               revealed={review.revealed}
               lastReviewIso={reviewCard ? lastReview.get(reviewCard.id) : null}
               desiredRetention={desiredRetention}
-              onFlip={() => setReview((r) => (r ? { ...r, shown: !r.shown } : r))}
+              onFlip={flipCard}
               onGrade={(g) => void grade(g)}
               onSkip={advance}
               onUndo={undoGrade}
@@ -667,6 +778,9 @@ export default function App() {
               canUndo={(review.undo.length > 0 && review.idx > 0)}
               sessionStats={{ answered: review.answered, again: review.again, good: review.good }}
               airGestures={airGestures}
+              stale={review.stale}
+              onResume={() => setReview((r) => (r ? { ...r, stale: false, shown: false, revealed: 0, hintLevel: 0 } : r))}
+              onRestart={() => startReview(review.scope)}
             />
           )}
           {view === "browse" && (
@@ -715,6 +829,10 @@ export default function App() {
               chromeAvailable={chromeAvailable}
               airGestures={airGestures}
               onAirGestures={setAirGestures}
+              staleMin={staleMin}
+              onStaleMin={(v) => setStaleMin(v as StaleThreshold)}
+              autoEndOn={autoEndOn}
+              onAutoEnd={setAutoEndOn}
               cardCount={cards.length}
               reviewCount={reviews.length}
             />

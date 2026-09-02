@@ -12,6 +12,8 @@ Review queue order: **learning (10m step) → due → new** (new cards capped at
 | Card shown (back) | **Grade** with `1–4` or a swipe — the grading bar shows the FSRS interval before you commit |
 | After grading | Next card; `⇧G` undoes the last grade, `⌃→` skips, `E` edits, `S`/`B` suspend/bury |
 
+**Step-away handling** (Settings → Activity, default 3 min): if you're idle while a card is shown, the answer is auto-hidden, the pomodoro pauses, and a banner offers **Resume** (same queue), **Restart queue** (re-derived) or **End**. Sessions idle for 15 min end automatically — the queue is re-derived next time. Turning the threshold to **Off** disables it. Any key, click or swipe resumes without acting on the hidden card.
+
 ## Gestures
 
 Both pointer-drag and camera air gestures use the same grade mapping:

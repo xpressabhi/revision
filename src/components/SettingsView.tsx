@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SHORTCUTS } from "../lib/hotkeys";
+import { STALE_OPTIONS } from "../lib/session";
 import { Icon } from "./ui";
 
 export type ThemeId = "dark-a" | "light-a" | "dark-b" | "light-b";
@@ -23,6 +24,10 @@ type Props = {
   chromeAvailable: boolean | null;
   airGestures: boolean;
   onAirGestures: (v: boolean) => void;
+  staleMin: number;
+  onStaleMin: (v: number) => void;
+  autoEndOn: boolean;
+  onAutoEnd: (v: boolean) => void;
   cardCount: number;
   reviewCount: number;
 };
@@ -145,6 +150,26 @@ export function SettingsView(p: Props) {
             </button>
           </div>
           <p style={{ fontSize: 11 }}>Hand tracking runs locally on your webcam — nothing is uploaded. Raise your hand: <b>pinch</b> flips the card, <b>air-swipes</b> grade it (← Again · → Good · ↑ Easy · ↓ Hard). macOS asks for camera access once. On desktop you can also drag the card directly or just click to flip.</p>
+        </div>
+
+        <div className="set-card">
+          <h3>Activity</h3>
+          <div className="set-row">
+            <span className="muted">Step-away detection — if you're idle that long mid-review, the answer is hidden and the session pauses</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              {STALE_OPTIONS.map((o) => (
+                <button key={o.value} className={`btn btn-sm ${p.staleMin === o.value ? "btn-primary" : ""}`} onClick={() => p.onStaleMin(o.value)}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row">
+            <span className="muted">End sessions idle for 15 min (queue re-derives on next start)</span>
+            <button className={`btn btn-sm ${p.autoEndOn ? "btn-primary" : ""}`} onClick={() => p.onAutoEnd(!p.autoEndOn)}>
+              {p.autoEndOn ? "On" : "Off"}
+            </button>
+          </div>
         </div>
 
         <div className="set-card">

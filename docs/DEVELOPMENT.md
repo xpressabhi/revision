@@ -59,7 +59,7 @@ revision/
   public/
     mediapipe/              # bundled WASM + hand_landmarker.task (offline air gestures)
     blind75.csv             # Blind 75 import file
-  docs/                     # this doc + USER_GUIDE.md
+  docs/                     # this doc + USER_GUIDE.md + PLAN-* trackers
   CHANGELOG.md              # release history
   AGENTS.md                 # agent instructions (release checklist, gotchas)
 ```
