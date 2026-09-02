@@ -2,7 +2,7 @@
 
 All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
-## [Unreleased]
+## [v0.3.1] — 2026-09-02 — "Gesture map"
 
 ### Added
 - **Gesture map** in review: a compact d-pad at the top-right of the card shows which direction maps to which grade (← Again · → Good · ↑ Easy · ↓ Hard), tap/pinch = flip; hover highlights and clicking a direction grades directly. Grade-bar zones now show their gesture arrows.
@@ -45,5 +45,6 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 - Blind 75 seed (75 LeetCode questions) + 13 starter cards; CSV import/export; import Chrome bookmarks; article import with on-device Zen AI card generation.
 - **Release pipeline**: GitHub Actions matrix build (macOS arm64 / x64 / Windows) — first version with installers + the release workflow.
 
-[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.3.1...HEAD
+[v0.3.1]: https://github.com/xpressabhi/revision/releases/tag/v0.3.1
 [v0.3.0]: https://github.com/xpressabhi/revision/releases/tag/v0.3.0

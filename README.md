@@ -11,13 +11,13 @@ Local-first desktop app for principal-level interview prep. **FSRS-5 spaced repe
 
 ## Download & Install
 
-Latest: **v0.3.0** — releases are built automatically from `v*` tags (see [releases](https://github.com/xpressabhi/revision/releases)). See [CHANGELOG.md](CHANGELOG.md) for what's new per version.
+Latest: **v0.3.1** — releases are built automatically from `v*` tags (see [releases](https://github.com/xpressabhi/revision/releases)). See [CHANGELOG.md](CHANGELOG.md) for what's new per version.
 
 | Platform | Installer | Size |
 |---|---|---|
-| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.3.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_aarch64.dmg) | 21.5 MB |
-| macOS Intel | [Revision_0.3.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64.dmg) | 21.5 MB |
-| Windows | [Revision_0.3.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64_en-US.msi) | 16.5 MB · 19.9 MB |
+| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.3.1_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.1_aarch64.dmg) | 21.5 MB |
+| macOS Intel | [Revision_0.3.1_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.1_x64.dmg) | 21.5 MB |
+| Windows | [Revision_0.3.1_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.1_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.1_x64_en-US.msi) | 16.5 MB · 19.9 MB |
 
 Small app — every installer is under 25 MB.
 
