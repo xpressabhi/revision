@@ -13,13 +13,15 @@ Local-first desktop app for principal-level interview prep. **FSRS-5 spaced repe
 
 Latest: **v0.3.0** — releases are built automatically from `v*` tags (see [releases](https://github.com/xpressabhi/revision/releases)).
 
-| Platform | Installer |
-|---|---|
-| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.3.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_aarch64.dmg) |
-| macOS Intel | [Revision_0.3.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64.dmg) |
-| Windows | [Revision_0.3.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64_en-US.msi) |
+| Platform | Installer | Size |
+|---|---|---|
+| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.3.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_aarch64.dmg) | 21.5 MB |
+| macOS Intel | [Revision_0.3.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64.dmg) | 21.5 MB |
+| Windows | [Revision_0.3.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.3.0_x64_en-US.msi) | 16.5 MB · 19.9 MB |
 
 macOS: open the .dmg and drag Revision to Applications (first launch: right-click → Open if Gatekeeper complains — the app is signed with ad-hoc signatures only). Windows: run the installer.
+
+Small app — every installer is under 25 MB.
 
 Already built this repo locally? Install straight to `/Applications` with `npm run tauri:build:install` (see [Updates](#updates)).
 
