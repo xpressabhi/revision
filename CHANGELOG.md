@@ -2,6 +2,11 @@
 
 All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
+## [v0.4.0] — 2026-09-02 — "Activity-aware sessions"
+
+### Added
+- **Activity-aware review sessions** (Settings → Activity): if you're idle mid-review (default 3 min, Off/1/3/5/10), the answer is auto-hidden, the pomodoro pauses, and a banner offers Resume / Restart queue / End. Sessions idle 15+ min auto-end (toggleable); returning from another window after the threshold applies the same treatment instantly. Any key/click/swipe resumes without grading the exposed card — every recorded grade stays a real recall.
+
 ## [v0.3.1] — 2026-09-02 — "Gesture map"
 
 ### Added
@@ -45,6 +50,7 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 - Blind 75 seed (75 LeetCode questions) + 13 starter cards; CSV import/export; import Chrome bookmarks; article import with on-device Zen AI card generation.
 - **Release pipeline**: GitHub Actions matrix build (macOS arm64 / x64 / Windows) — first version with installers + the release workflow.
 
-[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.4.0...HEAD
+[v0.4.0]: https://github.com/xpressabhi/revision/releases/tag/v0.4.0
 [v0.3.1]: https://github.com/xpressabhi/revision/releases/tag/v0.3.1
 [v0.3.0]: https://github.com/xpressabhi/revision/releases/tag/v0.3.0
