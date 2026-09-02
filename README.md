@@ -40,8 +40,10 @@ macOS: open the .dmg and drag Revision to Applications (first launch: right-clic
 |---|---|
 | **Dashboard** — due today, streak heatmap thumbnails, smart study queues | **Review** — front of card with the gesture map (← Again · → Good · ↑ Easy · ↓ Hard) |
 | <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="560"> | <img src="docs/screenshots/review-hidden.png" alt="Review — front" width="560"> |
-| **Review (shown)** — answer side with the FSRS prediction grading bar | **Analytics** — retention forecast, heatmap, grade distribution |
-| <img src="docs/screenshots/review-shown.png" alt="Review — answer + grading bar" width="560"> | <img src="docs/screenshots/analytics.png" alt="Analytics" width="560"> |
+| **Review (shown)** — answer side with the FSRS prediction grading bar | **Browse** — search, filters, inline edit |
+| <img src="docs/screenshots/review-shown.png" alt="Review — answer + grading bar" width="560"> | <img src="docs/screenshots/browse.png" alt="Browse" width="560"> |
+| **Analytics** — retention forecast, heatmap, grade distribution | |
+| <img src="docs/screenshots/analytics.png" alt="Analytics" width="560"> | |
 
 ## Docs
 
