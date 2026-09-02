@@ -25,12 +25,18 @@ Small app — every installer is under 25 MB.
 
 Already built this repo locally? Install straight to `/Applications` with `npm run tauri:build:install` (see [Updates](#updates)).
 
+### v0.3.0 — "Gesture control"
+
+- **Drag to flip & grade**: grab the card and it follows your pointer with a tilt — release past the threshold to fly it out and grade (← **Again** · → **Good** · ↑ **Easy** · ↓ **Hard**), short drags spring back, a flick flips before reveal, and a plain click/tap toggles the answer. Live badge indicators show which grade you're committing to.
+- **Air gestures (camera)**: opt-in in Settings → Gestures — MediaPipe HandLandmarker hand tracking runs *entirely locally* (WASM, ~7.8 MB model bundled, nothing uploaded). Raised-hand **pinch** flips the card; **air-swipes** left/right/up/down grade it with the same mapping. Picture-in-picture camera preview with a live hand skeleton and status chip so you can aim; macOS asks for camera permission once.
+- **Offline & private by default**: gesture engine works without a camera at all — if the camera is missing/denied slow, the overlay says so and gracefully drops back to keyboard/drag input.
+- Bundled installer size stays small (≤ 25 MB) despite the on-device hand-tracking model.
+
 ### v0.2.0 — "Recall" redesign
 
 - **FSRS-5 scheduler** (Free Spaced Repetition Scheduler): stability/difficulty/retrievability per card, live interval predictions on the grading bar (`Again 10m · Hard 1d · Good 3d · Easy 15d`), desired-retention control (80–95%), per-grade projection curves in the inspector.
 - **3-pane macOS glass shell**: collapsible translucent sidebar (decks / smart filters / tag graph), central canvas, collapsible FSRS+AI inspector. Vibrancy materials, hairline borders, layered shadows, 4 themes (Slate & Emerald / OLED & Amber, dark + light each, ⌘⇧T cycles).
 - **Command bar (⌘K)**: fuzzy search across decks, cards, tags and actions; keyboard-first everything (Space reveal, 1–4 grade, G cloze reveal, H hints, ⇧G undo, ⌃→ skip, S/B suspend/bury, ⌘↵ end).
-- **Gestures**: drag the card to flip or grade it (← Again · → Good · ↑ Easy · ↓ Hard, release past the threshold to commit, flick to flip), click/tap to flip. Optional **air gestures** via camera (Settings → Gestures): MediaPipe HandLandmarker runs locally in-app — pinch to flip, air-swipes to grade; video never leaves the device (macOS asks for camera permission once).
 - **Cloze deletions + LaTeX**: Anki-style `{{c1::answer}}` with progressive per-block reveal (G), KaTeX rendering for `$…$` and `$$…$$` in cards and editor preview.
 - **Dashboards & analytics**: GitHub-style 53-week streak heatmap, FSRS retention forecast, review-queue forecast, deck cards with progress rings, grade distribution, memory-load charts.
 - **Quick capture (⌘⇧K)** and in-app **AI card generator drawer** (on-device, no API key): paste text → Q&A / cloze / flashcard variants.
