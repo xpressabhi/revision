@@ -24,6 +24,7 @@ Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + Reac
   3. `src-tauri/Cargo.toml` (`[package] version`)
 - Release flow: `git commit` → `git push origin main` → `git tag -a vX.Y.Z -m "..."` → `git push origin vX.Y.Z` → release auto-publishes when the 3 matrix builds finish (~10–25 min).
 - **Add the release to `CHANGELOG.md`** (new `## [vX.Y.Z]` section at the top, Keep-a-Changelog style) and refresh the version-link footer — do this in the release commit, before tagging.
+- **Docs live in**: `README.md` (landing + download table), `docs/USER_GUIDE.md` (usage), `docs/DEVELOPMENT.md` (dev), `CHANGELOG.md` (history), `AGENTS.md` (this file). When a feature lands, keep the relevant doc in sync.
 - Do NOT push stale local tags (older tags v0.1.0/v0.2.0/v0.2.1 exist locally but were never pushed to origin; the first real release was v0.3.0).
 - To monitor a run without `gh`: `curl -s https://api.github.com/repos/xpressabhi/revision/actions/runs?per_page=1`.
 - README download links are hardcoded per version (`Revision_X.Y.Z_*.dmg` etc.) — update them **and their asset sizes** (fetch from `curl -s https://api.github.com/repos/xpressabhi/revision/releases | grep '"size"'`) in README when bumping versions. Asset name patterns: `Revision_{ver}_aarch64.dmg`, `Revision_{ver}_x64.dmg`, `Revision_{ver}_x64-setup.exe`, `Revision_{ver}_x64_en-US.msi`.

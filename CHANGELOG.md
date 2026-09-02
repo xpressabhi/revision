@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](../AGENTS.md) (version in 3 manifests, README links + sizes, this file).
+All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
 ## [v0.3.0] — 2026-09-01 — "Gesture control"
 
