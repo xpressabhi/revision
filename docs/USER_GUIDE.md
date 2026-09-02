@@ -29,6 +29,7 @@ Both pointer-drag and camera air gestures use the same grade mapping:
 - **Flick** the card any direction before reveal — reveals the answer
 - **Grab & drag** a shown card — it follows the pointer with a tilt, grade badges light up as you drag; release past the glow to *fly it out and grade*, release short to *spring back* with no effect
 - Drags ignore links/buttons inside the card; on touch screens vertical swipes scroll instead of grading
+- A **gesture map** (compact d-pad) floats at the top-right of the card during review — arrows show which direction maps to which grade (← Again · → Good · ↑ Easy · ↓ Hard), the center shows tap/pinch = flip, and the caption switches between “tap to reveal” and “grade”. Hover to highlight, click a direction to grade it directly.
 
 **Air gestures (opt-in, Settings → Gestures → “Air gestures (camera)”):**
 

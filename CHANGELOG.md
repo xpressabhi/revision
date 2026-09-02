@@ -2,6 +2,11 @@
 
 All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
+## [Unreleased]
+
+### Added
+- **Gesture map** in review: a compact d-pad at the top-right of the card shows which direction maps to which grade (← Again · → Good · ↑ Easy · ↓ Hard), tap/pinch = flip; hover highlights and clicking a direction grades directly. Grade-bar zones now show their gesture arrows.
+
 ## [v0.3.0] — 2026-09-01 — "Gesture control"
 
 ### Added

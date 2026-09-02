@@ -83,11 +83,11 @@ export function ReviewView(p: Props) {
   const hoverPred = hoverZone ? preds.find((x) => x.key === hoverZone) : null;
   const fsrsPred = preds.find((x) => x.key === 3);
 
-  const gradeZones: { g: Grade; label: string; cls: string }[] = [
-    { g: 1, label: "Again", cls: "again" },
-    { g: 2, label: "Hard", cls: "hard" },
-    { g: 3, label: "Good", cls: "good" },
-    { g: 4, label: "Easy", cls: "easy" },
+  const gradeZones: { g: Grade; label: string; cls: string; arr: string }[] = [
+    { g: 1, label: "Again", cls: "again", arr: "←" },
+    { g: 2, label: "Hard", cls: "hard", arr: "↓" },
+    { g: 3, label: "Good", cls: "good", arr: "→" },
+    { g: 4, label: "Easy", cls: "easy", arr: "↑" },
   ];
 
   return (
@@ -114,6 +114,7 @@ export function ReviewView(p: Props) {
 
       {/* card stage */}
       <div className="flip-wrap" {...drag.bind}>
+        <GesturePad air={p.airGestures} shown={p.shown} onGrade={(g) => p.onGrade(g)} />
         <div
           className={`flip-card ${p.shown ? "flipped" : ""} ${drag.state.phase === "dragging" ? "dragging" : ""} ${drag.state.phase === "flying" ? "flying" : ""}`}
           style={{ minHeight: 360, ...dragTransform(drag.state, p.shown) }}
@@ -194,6 +195,7 @@ export function ReviewView(p: Props) {
                 onMouseEnter={() => setHoverZone(z.g)}
                 onMouseLeave={() => setHoverZone(null)}
               >
+                <span className="g-swipe" title={`drag/swipe ${z.arr}`}>{z.arr}</span>
                 <span className="g-key">{z.g}</span>
                 <span className="g-label">{z.label}</span>
                 <span className="g-int">{pr.label}</span>
@@ -214,6 +216,39 @@ export function ReviewView(p: Props) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+const PAD_CELLS: { dir: DragDir; grade: number; label: string; cls: string; area: string }[] = [
+  { dir: "up", grade: 4, label: "EASY", cls: "easy", area: "1 / 2" },
+  { dir: "left", grade: 1, label: "AGAIN", cls: "again", area: "2 / 1" },
+  { dir: "right", grade: 3, label: "GOOD", cls: "good", area: "2 / 3" },
+  { dir: "down", grade: 2, label: "HARD", cls: "hard", area: "3 / 2" },
+];
+
+function GesturePad({ air, shown, onGrade }: { air: boolean; shown: boolean; onGrade: (g: Grade) => void }) {
+  return (
+    <div className="gesture-pad" role="img" aria-label="Gesture map — swipe or drag the card in a direction to grade; tap to flip">
+      <div className="gp-grid">
+        <div className="gp-center">
+          <span>{air ? "pinch" : "tap"}</span>
+          <span className="gp-sub">flip</span>
+        </div>
+        {PAD_CELLS.map((c) => (
+          <button
+            key={c.dir}
+            className={`gp-cell ${c.cls}`}
+            style={{ gridArea: c.area }}
+            title={`${c.label} (grade ${c.grade})`}
+            onClick={() => onGrade(c.grade as Grade)}
+          >
+            <span className="gp-arrow">{c.dir === "up" ? "↑" : c.dir === "down" ? "↓" : c.dir === "left" ? "←" : "→"}</span>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      <span className="gp-caption">gestures{shown ? " · grade" : " · tap to reveal"}</span>
     </div>
   );
 }

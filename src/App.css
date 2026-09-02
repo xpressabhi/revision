@@ -1379,6 +1379,15 @@ svg.chart {
   border-radius: 5px;
   padding: 1px 5px;
 }
+.grade-zone .g-swipe {
+  font-size: 11px;
+  color: var(--text-4);
+  transition: color var(--t-fast), transform var(--t-fast) var(--ease-out);
+}
+.grade-zone:hover .g-swipe {
+  color: inherit;
+  transform: scale(1.2);
+}
 .grade-zone .g-label {
   font-size: 12.5px;
   font-weight: 600;
@@ -1562,6 +1571,124 @@ body.gesture-active img {
 
 .gesture-hint {
   opacity: 0.55;
+}
+
+/* gesture map (d-pad) */
+.gesture-pad {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--acrylic);
+  -webkit-backdrop-filter: var(--blur-l1);
+  backdrop-filter: var(--blur-l1);
+  opacity: 0.82;
+  transition: opacity var(--t-fast) var(--ease-out), border-color var(--t-fast);
+}
+.gesture-pad:hover {
+  opacity: 1;
+  border-color: var(--hairline-strong);
+}
+.gp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  grid-template-rows: repeat(3, auto);
+  gap: 3px;
+  place-items: center;
+}
+.gp-center {
+  grid-area: 2 / 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 34px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px dashed var(--hairline-strong);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  cursor: default;
+}
+.gp-sub {
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-4);
+  text-transform: uppercase;
+}
+.gp-cell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out), border-color var(--t-fast), transform var(--t-fast) var(--ease-out);
+}
+.gp-cell:hover {
+  transform: scale(1.08);
+}
+.gp-cell:active {
+  transform: scale(0.95);
+}
+.gp-arrow {
+  font-size: 12px;
+  line-height: 1;
+}
+.gp-cell.again {
+  color: var(--danger);
+}
+.gp-cell.again:hover {
+  background: var(--danger-dim);
+  border-color: var(--danger);
+}
+.gp-cell.good {
+  color: var(--accent);
+}
+.gp-cell.good:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.gp-cell.easy {
+  color: var(--info);
+}
+.gp-cell.easy:hover {
+  background: var(--info-dim);
+  border-color: var(--info);
+}
+.gp-cell.hard {
+  color: var(--warning);
+}
+.gp-cell.hard:hover {
+  background: var(--warning-dim);
+  border-color: var(--warning);
+}
+.gp-caption {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+body.focus-mode .gesture-pad {
+  display: none;
 }
 
 /* hand tracking overlay */
