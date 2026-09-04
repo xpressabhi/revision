@@ -218,11 +218,11 @@ export function HandOverlay({ shown, onFlip, onGrade }: Props) {
 
   const statusLabel =
     status === "starting" ? "starting camera…" :
-    status === "ready" ? (handSeen ? "hand detected — gesture" : "raise your hand into view") :
-    status === "denied" ? "camera denied — enable it in System Settings → Privacy & Security → Camera" :
+    status === "ready" ? (handSeen ? "hand detected" : "raise your hand into view") :
+    status === "denied" ? "camera denied. Enable it in System Settings." :
     status === "nocamera" ? "no camera found" :
     status === "unsupported" ? "camera not supported in this build" :
-    status === "timeout" ? "camera is taking long to start — check the permission prompt" :
+    status === "timeout" ? "camera is slow to start. Check the permission prompt" :
     "camera error (try toggling the setting)";
 
   return (

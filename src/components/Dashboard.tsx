@@ -32,7 +32,7 @@ export function Dashboard({ cards, reviews, lastReview, desiredRetention, onStud
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span className="chip" style={{ color: "var(--warning)" }}><Icon name="clock" size={11} /> {dueNow} due now</span>
-          <button className="btn btn-primary" onClick={onStudyAll}><Icon name="bolt" size={13} /> Quick Study</button>
+          <button className="btn btn-primary" onClick={onStudyAll}><Icon name="bolt" size={13} /> Study all</button>
         </div>
       </div>
 
@@ -45,7 +45,7 @@ export function Dashboard({ cards, reviews, lastReview, desiredRetention, onStud
 
       <div className="heatmap">
         <div className="hm-head">
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Study Streak — last 53 weeks</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>Study Streak (last 53 weeks)</div>
           <div className="hm-legend">
             less
             <i style={{ background: "var(--heat-0)" }} />
@@ -64,7 +64,7 @@ export function Dashboard({ cards, reviews, lastReview, desiredRetention, onStud
       <div className="chart-grid">
         <div className="chart-card">
           <div style={{ fontWeight: 600, fontSize: 13 }}>Retention forecast</div>
-          <div style={{ fontSize: 11, color: "var(--text-3)" }}>Average R(t) across all reviewed cards — dashed line is your target ({Math.round(desiredRetention * 100)}%)</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)" }}>Average R(t) across reviewed cards. Dashed line is your target ({Math.round(desiredRetention * 100)}%)</div>
           <RetentionChart forecast={forecast} target={desiredRetention} />
         </div>
         <div className="chart-card">
@@ -86,7 +86,7 @@ export function Dashboard({ cards, reviews, lastReview, desiredRetention, onStud
           {groups.length === 0 && (
             <div className="empty-state" style={{ gridColumn: "1 / -1" }}>
               <span className="es-ico"><Icon name="book" size={26} /></span>
-              No decks yet — create a card or load demo content (Settings → Content).
+              No decks yet. Create a card or load demo content (Settings, Content).
             </div>
           )}
         </div>
@@ -136,26 +136,35 @@ function RetentionChart({ forecast, target }: { forecast: { day: number; r: numb
   const H = 170;
   const PAD = { l: 30, r: 10, t: 10, b: 20 };
   const points = forecast.filter((p) => p.r !== null) as { day: number; r: number }[];
-  const x = (d: number) => PAD.l + (d / 30) * (W - PAD.l - PAD.r);
-  const y = (r: number) => H - PAD.b - ((Math.min(1, r) - 0.75) / 0.25) * (H - PAD.t - PAD.b);
+  const maxDay = Math.max(1, ...forecast.map((p) => p.day));
+  const minR = points.length ? Math.min(...points.map((p) => p.r)) : 0.75;
+  const floor = Math.floor(Math.min(0.75, minR) * 20) / 20;
+  const span = Math.max(0.05, 1 - floor);
+  const x = (d: number) => PAD.l + (d / maxDay) * (W - PAD.l - PAD.r);
+  const y = (r: number) => {
+    const c = Math.max(floor, Math.min(1, r));
+    return H - PAD.b - ((c - floor) / span) * (H - PAD.t - PAD.b);
+  };
+  const ticks: number[] = [];
+  for (let v = 1; v >= floor - 1e-9; v -= 0.05) ticks.push(Math.round(v * 100) / 100);
   const line = points.map((p) => `${x(p.day)},${y(p.r)}`).join(" ");
-  const area = `${x(0)},${H - PAD.b} ${line} ${x(30)},${H - PAD.b}`;
+  const area = points.length ? `${x(points[0].day)},${H - PAD.b} ${line} ${x(points[points.length - 1].day)},${H - PAD.b}` : "";
   return (
     <svg className="chart" viewBox={`0 0 ${W} ${H}`}>
-      {[0.75, 0.8, 0.85, 0.9, 0.95, 1.0].map((v) => (
+      {ticks.map((v) => (
         <g key={v}>
           <line className="grid-line" x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} strokeWidth={0.7} />
           <text className="chart-label" x={4} y={y(v) + 3}>{Math.round(v * 100)}</text>
         </g>
       ))}
       <line className="chart-target" x1={PAD.l} x2={W - PAD.r} y1={y(target)} y2={y(target)} strokeWidth={0.9} />
-      <polygon className="chart-area" points={area} />
-      <polyline className="chart-line" points={line} />
+      {points.length > 0 && <polygon className="chart-area" points={area} />}
+      {points.length > 0 && <polyline className="chart-line" points={line} />}
       {points.filter((_, i) => i % 5 === 0).map((p, i) => (
         <circle key={i} className="chart-dot" cx={x(p.day)} cy={y(p.r)} r={2} />
       ))}
       <text className="chart-label" x={x(0)} y={H - 5}>now</text>
-      <text className="chart-label" x={x(30) - 14} y={H - 5}>30d</text>
+      <text className="chart-label" x={x(maxDay) - 14} y={H - 5}>{maxDay}d</text>
     </svg>
   );
 }
@@ -187,7 +196,7 @@ function DeckCard({ group, index, onStudy, onBrowse }: { group: TagNode; index: 
           <div className="dc-name ellipsis">{group.root}</div>
           <div className="dc-meta">
             <span>{group.total} cards · {group.total - group.newCount - group.learning} mature</span>
-            <span>R avg {group.rAvg !== null ? Math.round(group.rAvg * 100) : "—"}%</span>
+            <span>R avg {group.rAvg !== null ? Math.round(group.rAvg * 100) : "-"}%</span>
           </div>
         </div>
       </div>
@@ -197,12 +206,9 @@ function DeckCard({ group, index, onStudy, onBrowse }: { group: TagNode; index: 
           {group.newCount > 0 && <span className="stat"><Icon name="sparkles" size={10} /> {group.newCount} new</span>}
         </div>
         <button className="btn btn-sm btn-primary dc-quick" onClick={(e) => { e.stopPropagation(); onStudy(); }}>
-          <Icon name="bolt" size={11} /> Quick Study
+          <Icon name="bolt" size={11} /> Study
         </button>
       </div>
-      <span className="chip new" style={{ position: "absolute", top: 12, right: 12, opacity: group.newCount ? 1 : 0 }}>
-        <Icon name="sparkles" size={9} /> {group.newCount}
-      </span>
     </div>
   );
 }
@@ -213,7 +219,7 @@ export function ShortcutHint() {
       <span><Keycap>⌘K</Keycap> anything</span>
       <span><Keycap>⌘3</Keycap> review</span>
       <span><Keycap>Space</Keycap> reveal</span>
-      <span><Keycap>1–4</Keycap> grade</span>
+      <span><Keycap>1-4</Keycap> grade</span>
     </div>
   );
 }

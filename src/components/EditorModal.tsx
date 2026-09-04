@@ -134,7 +134,7 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
               className="editor-source"
               value={tab === "front" ? front : back}
               onChange={(e) => (tab === "front" ? setFront(e.target.value) : setBack(e.target.value))}
-              placeholder={tab === "front" ? "Question — markdown, $math$, {{c1::cloze}}…" : "Answer — markdown, $math$, links…"}
+              placeholder={tab === "front" ? "Question: markdown, $math$, {{c1::cloze}}…" : "Answer: markdown, $math$, links…"}
             />
             <div className="editor-meta">
               <div className="tag-input-wrap">
@@ -178,11 +178,11 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
           <div className="drawer-head">
             <Icon name="sparkles" size={14} />
             <span style={{ fontWeight: 600, fontSize: 13 }}>AI Card Generator</span>
-            <span style={{ fontSize: 10, color: "var(--text-4)" }}>· on-device heuristics</span>
+            <span style={{ fontSize: 10, color: "var(--text-4)" }}>(on-device heuristics)</span>
             <button className="btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAiOpen(false)}><Icon name="x" size={13} /></button>
           </div>
           <div className="drawer-body">
-            <textarea value={source} onChange={(e) => setSource(e.target.value)} placeholder="Paste raw text — a paragraph, a definition, a chapter snippet. Generates cloze deletions or Q&A pairs from it." />
+            <textarea value={source} onChange={(e) => setSource(e.target.value)} placeholder="Paste raw text: a paragraph, a definition, a chapter snippet. Generates cloze deletions or Q and A pairs from it." />
             <div className="prompt-chips">
               {(["qa", "cloze", "cards"] as const).map((m) => (
                 <button key={m} className={`chip ${genMode === m ? "active" : ""}`} onClick={() => setGenMode(m)}>

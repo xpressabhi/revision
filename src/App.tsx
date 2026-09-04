@@ -207,10 +207,10 @@ export default function App() {
       setPomo((p) => {
         if (p.seconds <= 1) {
           if (p.mode === "focus") {
-            toast("Focus session done — take a 5 min break", "success");
+            toast("Focus session done. Take a 5 min break", "success");
             return { seconds: 5 * 60, running: false, mode: "break" };
           }
-          toast("Break over — ready for the next focus block", "info");
+          toast("Break over. Ready for the next focus block", "info");
           return { seconds: 25 * 60, running: false, mode: "focus" };
         }
         return { ...p, seconds: p.seconds - 1 };
@@ -363,7 +363,7 @@ export default function App() {
       setView("review");
       const queue = scopeCards(cards, scope, lastReview);
       if (queue.length === 0) {
-        toast("Queue clear — nothing due in this scope", "info");
+        toast("Queue clear. Nothing due in this scope", "info");
         return current;
       }
       lastTouchRef.current = Date.now();
@@ -466,7 +466,7 @@ export default function App() {
     const tags = card.tags.includes("suspended") ? card.tags : card.tags ? `${card.tags}, suspended` : "suspended";
     await updateCard(card.id, card.deck_id, card.front, card.back, tags);
     patchCard(card.id, { tags });
-    toast("Card suspended — hidden from queues", "info");
+    toast("Card suspended. Hidden from queues", "info");
     advance();
   };
 
@@ -506,7 +506,7 @@ export default function App() {
   }, []);
 
   const endStaleSession = useCallback(() => {
-    toast("Stepped away — session ended, queue re-derived on next start", "info");
+    toast("Stepped away. Session ended, queue re-derives on next start", "info");
     endReview();
   }, [toast]);
 
@@ -651,7 +651,7 @@ export default function App() {
       { id: "study-due", ico: "clock", title: "Study: Due now", sub: "all overdue cards", group: "Study", run: () => study("due") },
       { id: "study-stuck", ico: "warn", title: "Study: Stuck (<80% R)", sub: "cards projected below target retention", group: "Study", run: () => study("stuck") },
       { id: "study-new", ico: "sparkles", title: "Study: New + Learning", sub: "fresh cards and relearning lapses", group: "Study", run: () => study("learning") },
-      { id: "study-all", ico: "bolt", title: "Study: Everything", sub: "full queue — learning → due → new", group: "Study", tags: ["⌘3"], run: () => startReview({ kind: "all" }) },
+      { id: "study-all", ico: "bolt", title: "Study: Everything", sub: "full queue, learning first", group: "Study", tags: ["⌘3"], run: () => startReview({ kind: "all" }) },
     ];
   }, [startReview]);
 
@@ -821,7 +821,7 @@ export default function App() {
               }}
               isTauri={isTauri}
               onToggleWidget={() => invoke("toggle_widget").catch(() => toast("Widget is desktop-only", "warn"))}
-              onLoadDemo={async () => { const r = await loadDemoData(); await refresh(); toast(`Demo content: ${r.cards} cards · ${r.reviews} reviews`, "success"); }}
+              onLoadDemo={async () => { const r = await loadDemoData(); await refresh(); toast(`Demo content: ${r.cards} cards, ${r.reviews} reviews`, "success"); }}
               onClearAll={async () => { await clearAllCards(); await refresh(); toast("All data cleared", "warn"); }}
               onDedupe={async () => { const n = await deduplicateCards(); await refresh(); toast(n ? `Removed ${n} duplicates` : "No duplicates found", n ? "success" : "info"); }}
               onImportBookmarks={importBookmarks}
@@ -885,12 +885,12 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
       ))}
       <div className="hg-label" style={{ marginTop: 8 }}>gestures</div>
       <div className="help-row"><span className="hr-key"><kbd className="keycap">click</kbd></span><span className="hr-desc">Flip / reveal the card (also reverts)</span></div>
-      <div className="help-row"><span className="hr-key"><kbd className="keycap">drag</kbd></span><span className="hr-desc">Card follows you — release past the glow to grade: ← Again · → Good · ↑ Easy · ↓ Hard (flick to flip before reveal)</span></div>
+      <div className="help-row"><span className="hr-key"><kbd className="keycap">drag</kbd></span><span className="hr-desc">Card follows you. Release past the glow to grade (left Again, right Good, up Easy, down Hard)</span></div>
       <div className="help-row"><span className="hr-key"><kbd className="keycap">pinch</kbd></span><span className="hr-desc">Camera mode: thumb+index pinch flips the card</span></div>
-      <div className="help-row"><span className="hr-key"><kbd className="keycap">swipe</kbd></span><span className="hr-desc">Camera mode: air-swipe left/right/up/down to grade — same mapping as drag</span></div>
+      <div className="help-row"><span className="hr-key"><kbd className="keycap">swipe</kbd></span><span className="hr-desc">Camera mode: air-swipe to grade with the same mapping as drag</span></div>
       <div className="hg-label" style={{ marginTop: 8 }}>Tip</div>
       <div style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.6 }}>
-        Space to reveal, <Keycap>G</Keycap> for cloze, <Keycap>1–4</Keycap> to grade, <Keycap>⇧G</Keycap> to undo a grade. The grading bar always predicts the FSRS interval before you press.
+        Space to reveal, <Keycap>G</Keycap> for cloze, <Keycap>1-4</Keycap> to grade, <Keycap>⇧G</Keycap> to undo a grade. The grading bar always predicts the FSRS interval before you press.
       </div>
     </div>
   );
@@ -899,7 +899,7 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
 function Celebration({ label }: { label: string }) {
   const confetti = useMemo(() => {
     const pieces: React.CSSProperties[] = [];
-    const colors = ["var(--accent)", "var(--accent-2)", "var(--warning)", "var(--info)", "var(--danger)"];
+    const colors = ["var(--accent)", "var(--warning)", "var(--info)", "var(--danger)"];
     for (let i = 0; i < 26; i++) {
       const angle = (i / 26) * Math.PI * 2;
       const dist = 60 + (i % 5) * 26;

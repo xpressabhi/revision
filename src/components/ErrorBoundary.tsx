@@ -67,7 +67,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
           }}
         >
           <div style={{ maxWidth: 640, lineHeight: 1.6 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Runtime error — UI paused</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Runtime error. UI paused</div>
             <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{this.state.error.message}</div>
             {this.state.error.stack && <div style={{ opacity: 0.6, marginTop: 8, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{this.state.error.stack}</div>}
             <button

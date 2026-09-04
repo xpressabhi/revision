@@ -55,7 +55,7 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
                 key={f.id}
                 className={`sb-item ${activeSmart === f.id ? "active" : ""}`}
                 onClick={() => onSmart(f.id)}
-                title={`${f.label} — ${f.count} cards (⌘K: "study ${f.label}")`}
+                title={`${f.label}: ${f.count} cards`}
               >
                 <span className="sb-ico"><Icon name={f.ico} /></span>
                 <span>{f.label}</span>
@@ -80,7 +80,7 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
                       if (kids.length) setOpenRoots((s) => { const n = new Set(s); if (n.has(root.root)) n.delete(root.root); else n.add(root.root); return n; });
                       onGroup(root.full);
                     }}
-                    title={`${root.full} — ${root.total} cards · ${root.due} due`}
+                    title={`${root.full}: ${root.total} cards, ${root.due} due`}
                   >
                     {kids.length > 0 && <span className="sb-caret"><Icon name="chevron" size={10} /></span>}
                     <span className="sb-ico"><Icon name="book" /></span>
@@ -89,7 +89,7 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
                   </div>
                   {open &&
                     kids.map((k) => (
-                      <div key={k.full} className={`sb-item sb-tree ${activeGroup === k.full ? "active" : ""}`} onClick={() => onGroup(k.full)} title={`${k.full} — ${k.total} cards · ${k.due} due`}>
+                      <div key={k.full} className={`sb-item sb-tree ${activeGroup === k.full ? "active" : ""}`} onClick={() => onGroup(k.full)} title={`${k.full}: ${k.total} cards, ${k.due} due`}>
                         <span className="sb-ico"><Icon name="layers" size={12} /></span>
                         <span>{k.child}</span>
                         {k.due > 0 && <span className="sb-count">{k.due}</span>}
@@ -124,7 +124,7 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
             <span>New card</span>
           </div>
         )}
-        <div className="sb-item" onClick={toggleFocus} title="Focus mode — ⌘⇧F">
+        <div className="sb-item" onClick={toggleFocus} title="Focus mode (⌘⇧F)">
           <span className="sb-ico"><Icon name="focus" /></span>
           <span>Focus mode</span>
         </div>
@@ -156,7 +156,7 @@ function TagGraph({ groups, onPick, onStudy }: { groups: TagNode[]; onPick: (ful
   if (!top.length) {
     return (
       <div className="tag-graph" style={{ padding: 18, fontSize: 11, color: "var(--text-3)", textAlign: "center" }}>
-        No tags yet — create cards or load demo content.
+        No tags yet. Create cards or load demo content.
       </div>
     );
   }
@@ -181,7 +181,7 @@ function TagGraph({ groups, onPick, onStudy }: { groups: TagNode[]; onPick: (ful
         style={{ position: "absolute", right: 6, top: 6, fontSize: 10, color: "var(--accent)", fontWeight: 600 }}
         title="Study everything"
       >
-        Study all →
+        Study all
       </button>
     </div>
   );

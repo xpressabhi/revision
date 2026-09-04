@@ -52,7 +52,7 @@ export function renderMarkdown(text: string, revealCloze: number | "all" | null 
   // 4) restore math (already "safe" HTML from KaTeX)
   html = restoreMath(html, placeholders);
 
-  // 5) code blocks — protect
+  // 5) code blocks: protect
   const codeBlocks: string[] = [];
   html = html.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_m, _lang, code) => {
     const idx = codeBlocks.length;
@@ -60,7 +60,7 @@ export function renderMarkdown(text: string, revealCloze: number | "all" | null 
     return `@@CODEBLOCK_${idx}@@`;
   });
 
-  // inline code — protect
+  // inline code: protect
   const inlineCodes: string[] = [];
   html = html.replace(/`([^`]+)`/g, (_m, code) => {
     const idx = inlineCodes.length;

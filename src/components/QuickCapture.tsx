@@ -58,7 +58,7 @@ export function QuickCapture({ open, groups, onClose, onSave }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ color: "var(--accent)" }}><Icon name="capture" size={15} /></span>
           <span style={{ fontWeight: 600, fontSize: 13 }}>Quick capture</span>
-          <span style={{ fontSize: 10.5, color: "var(--text-4)" }}>⌘⇧K — flashcard from anywhere</span>
+          <span style={{ fontSize: 10.5, color: "var(--text-4)" }}>⌘⇧K (flashcard from anywhere)</span>
           <button className="btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose}><Icon name="x" size={13} /></button>
         </div>
         <textarea
@@ -66,7 +66,7 @@ export function QuickCapture({ open, groups, onClose, onSave }: Props) {
           className="cap-field"
           value={front}
           onChange={(e) => setFront(e.target.value)}
-          placeholder="Front — question / cloze prompt…"
+          placeholder="Front: question or cloze prompt…"
           onKeyDown={(e) => {
             if (e.key === "Enter" && e.metaKey) {
               e.preventDefault();
@@ -78,7 +78,7 @@ export function QuickCapture({ open, groups, onClose, onSave }: Props) {
           className="cap-field"
           value={back}
           onChange={(e) => setBack(e.target.value)}
-          placeholder="Back — answer / explanation (prefilled from clipboard)…"
+          placeholder="Back: answer or explanation (prefilled from clipboard)…"
         />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <select className="btn btn-sm" value={group} onChange={(e) => setGroup(e.target.value)} style={{ height: 30 }}>

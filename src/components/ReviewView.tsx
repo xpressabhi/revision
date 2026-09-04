@@ -74,13 +74,13 @@ export function ReviewView(p: Props) {
           <span className="big"><Icon name="wink" size={40} /></span>
           <div style={{ fontSize: 17, fontWeight: 600 }}>Session complete</div>
           <div style={{ fontSize: 12.5, color: "var(--text-3)" }}>
-            {done} cards reviewed · {p.sessionStats.good} good grades · {p.sessionStats.again} lapses
+            {done} cards reviewed ({p.sessionStats.good} good, {p.sessionStats.again} lapses)
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button className="btn btn-primary" onClick={p.onEnd}><Icon name="check" size={13} /> Back to dashboard</button>
           </div>
           <div style={{ fontSize: 11, color: "var(--text-4)", marginTop: 10 }}>
-            New cards are capped at 20 per session · <Keycap>⌘3</Keycap> restarts
+            New cards are capped at 20 per session. <Keycap>⌘3</Keycap> restarts
           </div>
         </div>
       </div>
@@ -114,9 +114,9 @@ export function ReviewView(p: Props) {
           })}
         </div>
         <div className="session-meta" style={{ fontSize: 10.5, color: "var(--text-4)" }}>
-          <span style={{ color: "var(--warning)" }}>● L {segStats.learning}</span>
-          <span style={{ color: "var(--accent)" }}>● R {segStats.review}</span>
-          <span style={{ color: "var(--accent-2)" }}>● N {segStats.new}</span>
+          <span style={{ color: "var(--warning)" }}>L {segStats.learning}</span>
+          <span style={{ color: "var(--accent)" }}>R {segStats.review}</span>
+          <span style={{ color: "var(--info)" }}>N {segStats.new}</span>
         </div>
         <PomoButton pomo={p.pomo} onToggle={p.onPomoToggle} onSkip={p.onPomoSkip} onReset={p.onPomoReset} />
       </div>
@@ -127,7 +127,7 @@ export function ReviewView(p: Props) {
         {p.stale && (
           <div className="stale-banner" onClick={p.onResume}>
             <div className="stale-title"><Icon name="clock" size={14} /> Stepped away?</div>
-            <div className="stale-sub">The answer is hidden — recall it fresh. Your queue and progress are untouched until you resume.</div>
+            <div className="stale-sub">The answer is hidden. Recall it fresh. Your queue and progress are untouched until you resume.</div>
             <div className="stale-actions">
               <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); p.onResume(); }}>Resume</button>
               <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); p.onRestart(); }}>Restart queue</button>
@@ -149,7 +149,7 @@ export function ReviewView(p: Props) {
           )}
           <div className="flip-face">
             <div className="face-label">
-              <span>{card.deck_name} · {card.tags.split(">")[0]}</span>
+              <span>{card.deck_name}</span>
               {card.state === "new" && <span className="chip new"><Icon name="sparkles" size={9} /> new</span>}
             </div>
             <div className="face-body">
@@ -158,14 +158,14 @@ export function ReviewView(p: Props) {
             <div className="face-hint">
               {p.shown ? (
                 <>
-                  <Keycap>1–4</Keycap> grade · <Keycap>E</Keycap> edit · <Keycap>S</Keycap> suspend · <Keycap>B</Keycap> bury · <Keycap>⇧G</Keycap> undo
-                  <span className="gesture-hint">· drag card ←→↑↓ to grade</span>
+                  <Keycap>1-4</Keycap> grade, <Keycap>E</Keycap> edit, <Keycap>S</Keycap> suspend, <Keycap>B</Keycap> bury, <Keycap>⇧G</Keycap> undo
+                  <span className="gesture-hint">, drag card to grade</span>
                 </>
               ) : (
                 <>
                   <Keycap>Space</Keycap> reveal answer
-                  {hasCloze(card.front) && <><span style={{ opacity: 0.5 }}>·</span><Keycap>G</Keycap> reveal next cloze ({p.revealed}/{clozeBlocks(card.front)})</>}
-                  <span className="gesture-hint">· click card or flick it to flip</span>
+                  {hasCloze(card.front) && <><Keycap>G</Keycap> reveal next cloze ({p.revealed}/{clozeBlocks(card.front)})</>}
+                  <span className="gesture-hint">, click card or flick it to flip</span>
                 </>
               )}
             </div>
@@ -173,14 +173,14 @@ export function ReviewView(p: Props) {
 
           <div className="flip-face back">
             <div className="face-label">
-              <span>Answer · {card.state === "review" ? `interval ${card.interval}d` : "reviewing"}</span>
+              <span>Answer ({card.state === "review" ? `interval ${card.interval}d` : "reviewing"})</span>
             </div>
             <div className="face-body">
               {hasCloze(card.front) && <><MarkdownView text={card.front} revealCloze="all" /><div style={{ borderTop: "1px solid var(--hairline)", margin: "12px 0 0" }} /></>}
               <div style={{ paddingTop: hasCloze(card.front) ? 12 : 0 }}><MarkdownView text={card.back} /></div>
             </div>
             <div className="face-hint">
-              <Keycap>1</Keycap> Again <Keycap>2</Keycap> Hard <Keycap>3</Keycap> Good <Keycap>4</Keycap> Easy — hover any zone for the FSRS delta
+              <Keycap>1</Keycap> Again <Keycap>2</Keycap> Hard <Keycap>3</Keycap> Good <Keycap>4</Keycap> Easy. Hover any zone for the FSRS delta
             </div>
           </div>
         </div>
@@ -192,15 +192,15 @@ export function ReviewView(p: Props) {
         <div className="grade-readout">
           {hoverPred ? (
             <>
-              If <b className={zoneCls(hoverZone!)}>{gradeZones.find((z) => z.g === hoverZone)?.label}</b> → interval <b>{hoverPred.label}</b>
-              {hoverPred.retention !== null && <> · R at due <b>{fmtPct(hoverPred.retention)}</b></>}
-              {hoverZone === 1 && <span> — stability collapses, card restarts at 10m</span>}
+              If <b className={zoneCls(hoverZone!)}>{gradeZones.find((z) => z.g === hoverZone)?.label}</b> then interval <b>{hoverPred.label}</b>
+              {hoverPred.retention !== null && <> with R at due <b>{fmtPct(hoverPred.retention)}</b></>}
+              {hoverZone === 1 && <span>. Stability collapses, card restarts at 10m</span>}
             </>
           ) : (
             <>
               R(t) today <b className={rToday !== null && rToday < 0.8 ? "bad" : rToday !== null && rToday < 0.9 ? "warn" : ""}>{fmtPct(rToday)}</b>
-              {fsrsPred && <> · Good → {fsrsPred.label}</>}
-              <span style={{ color: "var(--text-4)" }}>· FSRS-5 · target {Math.round(p.desiredRetention * 100)}%</span>
+              {fsrsPred && <> with Good at {fsrsPred.label}</>}
+              <span style={{ color: "var(--text-4)" }}>(FSRS-5, target {Math.round(p.desiredRetention * 100)}%)</span>
             </>
           )}
         </div>
@@ -249,7 +249,7 @@ const PAD_CELLS: { dir: DragDir; grade: number; label: string; cls: string; area
 
 function GesturePad({ air, shown, onGrade }: { air: boolean; shown: boolean; onGrade: (g: Grade) => void }) {
   return (
-    <div className="gesture-pad" role="img" aria-label="Gesture map — swipe or drag the card in a direction to grade; tap to flip">
+    <div className="gesture-pad" role="img" aria-label="Gesture map. Swipe or drag the card in a direction to grade. Tap to flip">
       <div className="gp-grid">
         <div className="gp-center">
           <span>{air ? "pinch" : "tap"}</span>
@@ -268,7 +268,7 @@ function GesturePad({ air, shown, onGrade }: { air: boolean; shown: boolean; onG
           </button>
         ))}
       </div>
-      <span className="gp-caption">gestures{shown ? " · grade" : " · tap to reveal"}</span>
+      <span className="gp-caption">gestures{shown ? " (grade)" : " (tap to reveal)"}</span>
     </div>
   );
 }

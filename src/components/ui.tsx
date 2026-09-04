@@ -103,6 +103,6 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
 }
 
 export function fmtPct(r: number | null | undefined): string {
-  if (r === null || r === undefined) return "—";
+  if (r === null || r === undefined) return "-";
   return `${Math.round(r * 100)}%`;
 }

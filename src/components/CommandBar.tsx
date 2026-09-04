@@ -51,7 +51,7 @@ export function CommandBar({ open, onClose, cards, groups, actions, onStudy, onO
         group: "Decks",
         ico: "book",
         title: item.full,
-        sub: `${item.total} cards · ${item.due} due · R ${item.rAvg !== null ? Math.round(item.rAvg * 100) : "—"}%`,
+        sub: `${item.total} cards, ${item.due} due`,
         tags: ["↵ study", "⌘2 browse"],
         run: () => onStudy({ kind: "group", group: item.full }),
       });
@@ -64,7 +64,7 @@ export function CommandBar({ open, onClose, cards, groups, actions, onStudy, onO
           group: "Cards",
           ico: "card",
           title: item.front.replace(/\{\{c\d+::/g, "").replace(/\}\}/g, "").slice(0, 60),
-          sub: `${item.deck_name} · ${item.state} · due ${new Date(item.due_at).toLocaleDateString()}`,
+          sub: `${item.deck_name} (${item.state})`,
           tags: ["↵ edit"],
           run: () => onOpenCard(item.id),
         });
@@ -169,17 +169,14 @@ export function CommandBar({ open, onClose, cards, groups, actions, onStudy, onO
           ))}
           {results.length === 0 && (
             <div style={{ padding: "24px 14px", textAlign: "center", color: "var(--text-3)", fontSize: 12.5 }}>
-              No matches for “{q}” — press <Keycap>⌘N</Keycap> to create a card
+              No matches for “{q}”. Press <Keycap>⌘N</Keycap> to create a card
             </div>
           )}
         </div>
         <div className="cmd-foot">
           <span><Keycap>↑</Keycap><Keycap>↓</Keycap> navigate</span>
-          <span className="sep">·</span>
           <span><Keycap>↵</Keycap> run</span>
-          <span className="sep">·</span>
           <span><Keycap>Tab</Keycap> fill</span>
-          <span className="sep">·</span>
           <span><Keycap>⌘1</Keycap> primary</span>
           <span style={{ marginLeft: "auto" }}>{results.length} results</span>
         </div>

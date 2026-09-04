@@ -75,7 +75,7 @@ export function Inspector({ mode, card, lastReviewIso, desiredRetention, hintLev
                   {hints.slice(0, Math.max(0, hintLevel)).map((h, i) => (
                     <div key={i} className="hint-text">{h}</div>
                   ))}
-                  {hintLevel === 0 && <div style={{ fontSize: 11.5, color: "var(--text-3)" }}>Stuck? Press <b>H</b> to reveal the first hint — each press deepens it.</div>}
+                  {hintLevel === 0 && <div style={{ fontSize: 11.5, color: "var(--text-3)" }}>Stuck? Press <b>H</b> to reveal the first hint. Each press deepens it.</div>}
                 </div>
                 <button className="btn btn-sm" onClick={onHint}>
                   <Icon name="sparkles" size={12} /> Reveal hint {hintLevel < hints.length ? `(${hintLevel + 1}/${hints.length})` : ""}
@@ -93,7 +93,7 @@ export function Inspector({ mode, card, lastReviewIso, desiredRetention, hintLev
               <div className="insp-row"><span className="k">Status</span><span className="v"><span className={`chip ${card.state}`}>{card.state === "new" ? "New" : card.state === "learning" ? "Learning" : "Review"}</span></span></div>
               <div className="insp-row"><span className="k">Due</span><span className="v">{new Date(card.due_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span></div>
               <div className="insp-row"><span className="k">Reps</span><span className="v">{card.reps}</span></div>
-              <div className="insp-row"><span className="k">R(t) today</span><span className="v" style={{ color: rToday === null ? "var(--text-3)" : rToday >= 0.9 ? "var(--accent)" : rToday >= 0.8 ? "var(--warning)" : "var(--danger)" }}>{rToday === null ? "—" : `${Math.round(rToday * 100)}%`}</span></div>
+              <div className="insp-row"><span className="k">R(t) today</span><span className="v" style={{ color: rToday === null ? "var(--text-3)" : rToday >= 0.9 ? "var(--accent)" : rToday >= 0.8 ? "var(--warning)" : "var(--danger)" }}>{rToday === null ? "-" : `${Math.round(rToday * 100)}%`}</span></div>
               {card.tags && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {card.tags.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
@@ -107,16 +107,16 @@ export function Inspector({ mode, card, lastReviewIso, desiredRetention, hintLev
               <h4>FSRS Projection</h4>
               {(card.state === "new" || card.stability <= 0) ? (
                 <div style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5 }}>
-                  New card — first grade will seed stability. Predictions appear after the first review.
+                  New card. First grade will seed stability. Predictions appear after the first review.
                 </div>
               ) : (
                 <>
                   <div className="insp-row"><span className="k">Stability S</span><span className="v">{fmtDays(card.stability)}</span></div>
-                  <div className="insp-row"><span className="k">Difficulty D</span><span className="v">{card.difficulty.toFixed(2)} <span style={{ color: "var(--text-3)", fontSize: 10 }}>(1 easy → 10 hard)</span></span></div>
+                  <div className="insp-row"><span className="k">Difficulty D</span><span className="v">{card.difficulty.toFixed(2)} <span style={{ color: "var(--text-3)", fontSize: 10 }}>(1 easy to 10 hard)</span></span></div>
                   <div className="insp-row"><span className="k">Target R</span><span className="v">{Math.round(desiredRetention * 100)}%</span></div>
                   {scenario.curves && <ScenarioChart curves={scenario.curves} preds={scenario.preds} />}
                   <div style={{ fontSize: 10.5, color: "var(--text-4)", lineHeight: 1.5 }}>
-                    R(t) = (1 + 19/81 · t/S)<sup>−0.5</sup> — projected retention if you grade Now (1), Hard (2), Good (3) or Easy (4). FSRS-5 weights.
+                    R(t) uses FSRS-5 weights. Projection for grades Now (1), Hard (2), Good (3), Easy (4).
                   </div>
                 </>
               )}

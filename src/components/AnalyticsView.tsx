@@ -39,7 +39,7 @@ export function AnalyticsView({ cards, reviews, lastReview }: Props) {
       <div className="page-head">
         <div className="page-title">
           <Icon name="chart" size={18} /> Study Analytics
-          <span className="sub">FSRS load · retrieval · accuracy</span>
+          <span className="sub">FSRS load, retrieval, accuracy</span>
         </div>
       </div>
 
@@ -47,13 +47,13 @@ export function AnalyticsView({ cards, reviews, lastReview }: Props) {
         <div className="kpi"><span className="k accent">{streak}</span><span className="l">day streak</span></div>
         <div className="kpi"><span className="k">{reviews.length}</span><span className="l">total reviews</span></div>
         <div className="kpi"><span className="k" style={{ color: "var(--warning)" }}>{loadToday}</span><span className="l">due today</span></div>
-        <div className="kpi"><span className="k">{rAvg !== null ? `${Math.round(rAvg * 100)}%` : "—"}</span><span className="l">avg R(t) now</span></div>
-        <div className="kpi"><span className="k" style={{ color: "var(--accent)" }}>{avgR90 !== null ? `${Math.round(avgR90 * 100)}%` : "—"}</span><span className="l">projected R · 90d</span></div>
+        <div className="kpi"><span className="k">{rAvg !== null ? `${Math.round(rAvg * 100)}%` : "-"}</span><span className="l">avg R(t) now</span></div>
+        <div className="kpi"><span className="k" style={{ color: "var(--accent)" }}>{avgR90 !== null ? `${Math.round(avgR90 * 100)}%` : "-"}</span><span className="l">projected R (90d)</span></div>
       </div>
 
       <div className="chart-grid">
         <div className="chart-card">
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Reviews per day · last 14 days</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>Reviews per day (last 14 days)</div>
           <DailyBars data={perDay} />
         </div>
         <div className="chart-card">
@@ -73,7 +73,7 @@ export function AnalyticsView({ cards, reviews, lastReview }: Props) {
 
       <div className="chart-grid">
         <div className="chart-card">
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Memory load · 90-day queue forecast</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>Memory load (90-day forecast)</div>
           <div className="queue-bars" style={{ marginTop: 4 }}>
             {buckets.map((b) => (
               <div className="queue-bar" key={b.label}>
@@ -117,7 +117,7 @@ export function AnalyticsView({ cards, reviews, lastReview }: Props) {
               </div>
             );
           })}
-          {recent.length === 0 && <div className="empty-state" style={{ border: "none", padding: 32 }}>No reviews yet — start studying.</div>}
+          {recent.length === 0 && <div className="empty-state" style={{ border: "none", padding: 32 }}>No reviews yet. Start studying.</div>}
         </div>
       </div>
     </div>
@@ -138,8 +138,8 @@ function DailyBars({ data }: { data: { label: string; count: number; date: Date 
               width: "100%",
               height: `${Math.max(3, (d.count / max) * 80)}px`,
               borderRadius: "4px 4px 0 0",
-              background: isToday(d.date) ? "var(--accent)" : d.count ? "var(--accent-2)" : "var(--gauge-track)",
-              opacity: d.count ? 0.85 : 1,
+              background: isToday(d.date) ? "var(--accent)" : d.count ? "var(--accent)" : "var(--gauge-track)",
+              opacity: isToday(d.date) ? 1 : d.count ? 0.45 : 1,
               transition: "height 400ms var(--ease-out)",
             }}
           />

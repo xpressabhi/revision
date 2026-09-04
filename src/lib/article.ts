@@ -118,7 +118,7 @@ export async function fetchArticle(url: string): Promise<{ title: string; text: 
       // Use URL as title and placeholder text so organizeArticle can still create a card via heuristic/Zen
       const fallbackTitle = u.split("/").pop()?.replace(/-/g, " ").replace(/\?.*/, "") || u;
       console.warn("All article fetches failed, using fallback stub for", u, lastErr);
-      return { title: fallbackTitle.slice(0, 120) || u, text: `Article at ${u} — fetch blocked (Cloudflare). Use Firecrawl API key in Settings for full extract.`, markdown: `# ${fallbackTitle}\n\nArticle at ${u}` };
+      return { title: fallbackTitle.slice(0, 120) || u, text: `Article at ${u}: fetch blocked (Cloudflare). Use Firecrawl API key in Settings for full extract.`, markdown: `# ${fallbackTitle}\n\nArticle at ${u}` };
     }
   }
 
@@ -162,7 +162,7 @@ function heuristicOrganize(url: string, title: string, text: string): Organized 
   if (lower.includes("behavior") || lower.includes("leadership") || lower.includes("star")) tags.push("behavioral");
   if (tags.length === 2) tags.push("reading");
 
-  const front = title.length > 80 ? `${title.slice(0, 77)}... — What’s the key takeaway?` : `${title} — What’s the key takeaway?`;
+  const front = title.length > 80 ? `${title.slice(0, 77)}...: What is the key takeaway?` : `${title}: What is the key takeaway?`;
   const back = `**Link:** ${url}\n\n**Summary:** ${firstSentences || text.slice(0, 300)}\n\n**Takeaways:**\n- \n- \n\n**Tags:** ${tags.join(", ")}`;
   return { front, back, tags: tags.join(", ") };
 }

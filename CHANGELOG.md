@@ -2,6 +2,15 @@
 
 All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
+## [v0.5.0] — 2026-09-04 — "Visual overhaul"
+
+### Changed
+- **Design overhaul across the app**: one brand accent per theme (removed the second-accent drift), unified shape scale (cards 12px, overlays 16px, inputs 8px, pills), tighter section rhythm, Geist/Satoshi-first type stack (Inter dropped as default), stronger `prefers-reduced-motion` handling, solid-accent focus ring. Review keeps the same gestures and grading, with calmer hints and readout copy.
+- **Copy cleanup**: no em/en dashes in UI strings, middle-dot separators capped at one per line, clearer empty states and tooltips.
+
+### Fixed
+- **Retention forecast chart stays in bounds**: the y-domain floor is now derived from the actual data minimum (snapped to 5%) instead of a hard 0.75, so decaying forecasts no longer draw past the axis. Grid ticks and the day axis follow the same scale.
+
 ## [v0.4.0] — 2026-09-02 — "Activity-aware sessions"
 
 ### Added
@@ -50,7 +59,8 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 - Blind 75 seed (75 LeetCode questions) + 13 starter cards; CSV import/export; import Chrome bookmarks; article import with on-device Zen AI card generation.
 - **Release pipeline**: GitHub Actions matrix build (macOS arm64 / x64 / Windows) — first version with installers + the release workflow.
 
-[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.5.0...HEAD
+[v0.5.0]: https://github.com/xpressabhi/revision/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/xpressabhi/revision/releases/tag/v0.4.0
 [v0.3.1]: https://github.com/xpressabhi/revision/releases/tag/v0.3.1
 [v0.3.0]: https://github.com/xpressabhi/revision/releases/tag/v0.3.0

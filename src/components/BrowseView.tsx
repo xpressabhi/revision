@@ -40,7 +40,7 @@ export function BrowseView(p: Props) {
       <div className="page-head">
         <div className="page-title">
           <Icon name="layers" size={18} /> Browse
-          <span className="sub">{p.counts.total} cards · {p.counts.due} due · {p.counts.newCount} new</span>
+          <span className="sub">{p.counts.total} cards, {p.counts.due} due</span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}><Icon name="upload" size={12} /> Import CSV</button>
@@ -92,11 +92,11 @@ export function BrowseView(p: Props) {
                   <td className="td-sub">{firstTag(c)}</td>
                   <td><span className={`chip ${c.state}`}>{c.state === "new" ? "New" : c.state === "learning" ? "Learning" : "Review"}</span></td>
                   <td className="mono" style={{ color: new Date(c.due_at).getTime() <= Date.now() && c.state !== "new" ? "var(--danger)" : "var(--text-2)" }}>
-                    {c.state === "new" ? "—" : dueInLabel(c.due_at)}
+                    {c.state === "new" ? "-" : dueInLabel(c.due_at)}
                   </td>
-                  <td className="mono">{c.state === "new" ? "—" : c.interval >= 1 ? formatInterval(c.interval) : "10m"}</td>
+                  <td className="mono">{c.state === "new" ? "-" : c.interval >= 1 ? formatInterval(c.interval) : "10m"}</td>
                   <td className="mono" style={{ color: r ? (r >= 0.9 ? "var(--accent)" : r >= 0.8 ? "var(--warning)" : "var(--danger)") : "var(--text-4)" }}>
-                    {r === null ? "—" : `${Math.round(r * 100)}%`}
+                    {r === null ? "-" : `${Math.round(r * 100)}%`}
                   </td>
                   <td>
                     <div className="row-actions" onClick={(e) => e.stopPropagation()}>
@@ -111,7 +111,7 @@ export function BrowseView(p: Props) {
               <tr>
                 <td colSpan={7}>
                   <div className="empty-state" style={{ border: "none", padding: "40px 20px" }}>
-                    Nothing matches — create a card with <Icon name="plus" size={11} /> New card.
+                    Nothing matches. Create a card with <Icon name="plus" size={11} /> New card.
                   </div>
                 </td>
               </tr>
