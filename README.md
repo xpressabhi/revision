@@ -28,7 +28,7 @@ Latest: **v0.7.0** — releases are built automatically from `v*` tags (see [rel
 | Platform | Installer | Size |
 |---|---|---|
 | macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.7.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_aarch64.dmg) | 8.1 MB |
-| macOS Intel | [Revision_0.7.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64.dmg) | 8.3 MB |
+| macOS Intel | [Revision_0.7.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64.dmg) | 8.4 MB |
 | Windows | [Revision_0.7.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64_en-US.msi) | 5.2 MB · 6.7 MB |
 
 Tiny app — every installer is under 9 MB (the old 41 MB MediaPipe bundle is gone).
