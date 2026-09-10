@@ -28,7 +28,7 @@ npm run build            # web build only -> dist/
 
 Requires Rust 1.70+ and system deps (Xcode CLI tools on macOS).
 
-**Verification:** there is no test framework — `npm run build` (tsc strict + vite) is the gate; gesture/hand logic ships without unit tests currently.
+**Verification:** `npm test` (Vitest, pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `handGestures`) plus `npm run build` (tsc strict + vite). There are no component/DOM tests yet.
 
 ## Project layout
 

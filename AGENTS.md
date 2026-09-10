@@ -9,11 +9,12 @@ Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + Reac
 | Browser-only dev (no Rust, uses localStorage) | `npm run dev` → http://localhost:1420 |
 | Desktop dev (Tauri) | `npm run tauri:dev` |
 | Typecheck + web build | `npm run build` (tsc && vite build) |
+| Unit tests (Vitest) | `npm test` (or `npm run test:watch`) |
 | Tauri debug build only | `npx tauri build --debug` |
 | Install built app to /Applications | `./scripts/install-to-applications.sh` (or `npm run tauri:build:install` = build + install) |
 | Build/install macOS WidgetKit widget | `./scripts/build-widget.sh` |
 
-**There is no test framework in this repo.** Verification = `npm run build` + manual/dev-server checks (Playwright MCP against `http://localhost:1420` works; note that the dev server may already be running — reuse it, don't start a second one).
+**Verification = `npm test` + `npm run build` + manual/dev-server checks.** Vitest covers the pure libs (`fsrs`, `derive`, `csv`, `markdown`, `session`, `handGestures`); there are no component/DOM tests. Playwright MCP against `http://localhost:1420` works for manual checks (note the dev server may already be running — reuse it, don't start a second one).
 
 ## Releasing (READ FIRST — version lives in 3 places)
 

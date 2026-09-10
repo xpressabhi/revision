@@ -52,6 +52,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Unit tests
+        run: npm test
+
       # Tauri Action builds the app and (on tags) creates a GitHub Release with assets.
       # - On tag push (v*): creates/updates a Release and uploads .dmg/.exe/.msi
       # - On branch push / manual dispatch: just builds and uploads artifacts for inspection
