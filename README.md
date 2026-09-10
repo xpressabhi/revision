@@ -15,11 +15,11 @@ Latest: **v0.6.0** — releases are built automatically from `v*` tags (see [rel
 
 | Platform | Installer | Size |
 |---|---|---|
-| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.6.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_aarch64.dmg) | — |
-| macOS Intel | [Revision_0.6.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64.dmg) | — |
-| Windows | [Revision_0.6.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64_en-US.msi) | — |
+| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.6.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_aarch64.dmg) | 8.1 MB |
+| macOS Intel | [Revision_0.6.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64.dmg) | 8.3 MB |
+| Windows | [Revision_0.6.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64_en-US.msi) | 5.2 MB · 6.7 MB |
 
-Small app — every installer is under 25 MB.
+Tiny app — every installer is under 9 MB (the old 41 MB MediaPipe bundle is gone).
 
 macOS: open the .dmg and drag Revision to Applications (first launch: right-click → Open if Gatekeeper complains — the app is signed with ad-hoc signatures only). Windows: run the installer.
 
