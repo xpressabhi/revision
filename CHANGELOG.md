@@ -6,6 +6,7 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 
 ### Added
 - **First-run setup guide** on web and desktop: four steps (review loop, add cards, tune the scheduler, sync or install the other build) with platform-specific copy, progress remembered in `localStorage`, auto-checks as you actually do each step, a dashboard checklist until it's done, and reopen from the keyboard overlay (`?`) or ⌘K.
+- **Walkthrough video** (`docs/media/walkthrough.mp4`) recorded from the real app by `scripts/record-walkthrough.mjs`: first-run guide, review loop, adding a card and a live sync merge (~30s, captioned).
 
 ## [v0.7.0] — 2026-09-10 — "Web + Sync"
 
