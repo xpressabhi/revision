@@ -6,12 +6,14 @@ export type Deck = {
 
 export type Card = {
   id: number;
+  uid: string;
   deck_id: number;
   front: string;
   back: string;
   tags: string;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
   deck_name?: string;
 };
 
@@ -52,14 +54,44 @@ export type DeckStats = {
   review: number;
 };
 
-export type ReviewRow = { id: number; card_id: number; grade: number; created_at: string };
+export type ReviewRow = { id: number; uid: string; card_id: number; grade: number; created_at: string };
 
-export type BackupFile = {
-  version: 1;
-  exported_at: string;
-  cards: CardWithState[];
-  reviews: ReviewRow[];
+/** One card + its scheduling state, identity-stable across devices via `uid`. */
+export type SyncCard = {
+  uid: string;
+  front: string;
+  back: string;
+  tags: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  due_at: string;
+  interval: number;
+  ease: number;
+  reps: number;
+  state: CardState["state"];
+  stability: number;
+  difficulty: number;
+  state_updated_at: string;
 };
+
+export type SyncReview = { uid: string; card_uid: string; grade: number; created_at: string };
+
+/**
+ * Portable snapshot of all user data. Used for backups (kind "revision-backup")
+ * and for file sync between the web and desktop apps (kind "revision-sync").
+ */
+export type SyncFile = {
+  kind: "revision-backup" | "revision-sync";
+  version: 2;
+  exported_at: string;
+  device_id: string;
+  device_name: string;
+  cards: SyncCard[];
+  reviews: SyncReview[];
+};
+
+export type BackupFile = SyncFile;
 
 export type ImportCardRow = {
   front: string;

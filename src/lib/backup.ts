@@ -1,11 +1,11 @@
-import { getAllCardsWithState, getReviews } from "./db";
+import { getSyncSnapshot } from "./db";
+import { makeSyncFile, parseSyncFile } from "./sync";
 import type { BackupFile } from "./types";
 
 const LS_AUTOBACKUP = "recall_autobackup";
 
 export async function buildBackup(): Promise<BackupFile> {
-  const [cards, reviews] = await Promise.all([getAllCardsWithState(), getReviews()]);
-  return { version: 1, exported_at: new Date().toISOString(), cards, reviews };
+  return makeSyncFile(await getSyncSnapshot(), "revision-backup");
 }
 
 export function downloadBackup(backup: BackupFile): void {
@@ -41,18 +41,13 @@ export function loadAutoBackup(): BackupFile | null {
   try {
     const raw = localStorage.getItem(LS_AUTOBACKUP);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as BackupFile;
-    if (!Array.isArray(parsed.cards) || !Array.isArray(parsed.reviews)) return null;
-    return parsed;
+    return parseSyncFile(raw);
   } catch {
     return null;
   }
 }
 
+/** Accepts current files and legacy v1 backups; returns the normalized v2 shape. */
 export function parseBackupFile(text: string): BackupFile {
-  const parsed = JSON.parse(text) as BackupFile;
-  if (!parsed || !Array.isArray(parsed.cards) || !Array.isArray(parsed.reviews)) {
-    throw new Error("Not a Revision backup file");
-  }
-  return parsed;
+  return parseSyncFile(text);
 }

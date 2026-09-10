@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { extractMath, restoreMath } from "./katex";
+import { openExternal } from "./platform";
 
 export function extractUrls(text: string): string[] {
   const urls: string[] = [];
@@ -166,13 +167,7 @@ export function MarkdownView({ text, revealCloze = null, className }: { text: st
     if (!href || !href.startsWith("http")) return;
     e.preventDefault();
     try {
-      const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
-      if (isTauri) {
-        const { openUrl } = await import("@tauri-apps/plugin-opener");
-        await openUrl(href);
-      } else {
-        window.open(href, "_blank", "noopener,noreferrer");
-      }
+      await openExternal(href);
     } catch {
       window.open(href, "_blank", "noopener,noreferrer");
     }

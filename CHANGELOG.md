@@ -2,6 +2,23 @@
 
 All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
+## [v0.7.0] — 2026-09-10 — "Web + Sync"
+
+### Added
+- **Web app**: the same UI runs as a static SPA on Vercel backed by IndexedDB (Dexie) — no server, no account, full FSRS scheduling, imports, analytics and backups.
+- **File sync between desktop and web**: Settings → Sync attaches one JSON file both apps share; **Sync now** merges both ways — stable card/review uids, last-write-wins content and scheduling state, review-history union, deletion tombstones. Chromium edits the file in place via File System Access; Safari/Firefox get export/import buttons.
+- **Multi-tab refresh** (BroadcastChannel) and clear quota errors in the browser build.
+- **Sync panel** in Settings with attach/detach, sync-now, export and import/merge.
+- Backups now share the sync format (v2, stable uids + tombstones); legacy v1 backups import and upgrade automatically.
+
+### Changed
+- Browser storage moved from `localStorage` to IndexedDB; legacy `revision_*` data migrates on first launch and the old keys are removed.
+- Tauri APIs are loaded lazily behind `src/lib/platform.ts`, so the web bundle contains no desktop code.
+- Cards are soft-deleted (`deleted_at`) in both drivers so deletions can sync.
+
+### Fixed
+- Browser builds now delete a card's review rows along with the card, matching the desktop cascade (previously they lingered in analytics).
+
 ## [v0.6.0] — 2026-09-10 — "Focus"
 
 ### Added
@@ -91,7 +108,8 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 - Blind 75 seed (75 LeetCode questions) + 13 starter cards; CSV import/export; import Chrome bookmarks; article import with on-device Zen AI card generation.
 - **Release pipeline**: GitHub Actions matrix build (macOS arm64 / x64 / Windows) — first version with installers + the release workflow.
 
-[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.7.0...HEAD
+[v0.7.0]: https://github.com/xpressabhi/revision/releases/tag/v0.7.0
 [v0.6.0]: https://github.com/xpressabhi/revision/releases/tag/v0.6.0
 [v0.5.0]: https://github.com/xpressabhi/revision/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/xpressabhi/revision/releases/tag/v0.4.0

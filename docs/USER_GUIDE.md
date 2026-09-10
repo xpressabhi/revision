@@ -85,10 +85,20 @@ Images: paste an image directly into the editor textarea (max 1.5 MB) — it's s
 - **Restore auto-backup** rolls back to the snapshot taken automatically before the last clear/dedupe/restore.
 - CSV export is for spreadsheets; it does **not** include scheduling state.
 
+## Sync between desktop and web app
+
+Both apps are local-first; they meet in a single JSON file you keep wherever you like (Documents, iCloud Drive, Dropbox…).
+
+1. **Desktop**: Settings → Sync → **Attach sync file…** → choose or create e.g. `revision-sync.json`.
+2. **Web** (`Settings → Sync`): **Attach sync file…** and pick the same file. Chrome/Edge keep write access; Safari/Firefox show Export and Import/merge buttons instead.
+3. Click **Sync now** on either side — it reads the file, merges, and writes the result back. Change the file or detach any time.
+
+Merge rules: cards are matched by a stable id, the newest content edit wins, scheduling state is taken from the most recent review, review history is unioned (no duplicates), and deletions propagate. When you have no attached file, use **Export sync file** and **Import / merge sync file** to move data manually.
+
 ## DB location
 
 - **Tauri app**: app data dir — e.g. `~/Library/Application Support/com.revision.app/revision.db` (macOS). Use **Export backup** for a safe copy.
-- **Browser preview**: `localStorage` keys `revision_cards`, `revision_states`, etc. Clear site data to reset.
+- **Web app / browser preview**: IndexedDB database `revision` (cards, states, reviews, decks). Older browser builds stored JSON in `localStorage` under `revision_*`; it is imported into IndexedDB automatically on first launch. Clear site data to reset.
 
 ## Tray, autostart & updates
 

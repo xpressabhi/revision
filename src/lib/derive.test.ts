@@ -6,15 +6,18 @@ import type { CardWithState, ReviewRow } from "./types";
 let nextId = 1;
 
 function card(overrides: Partial<CardWithState> = {}): CardWithState {
+  const id = nextId++;
   const now = new Date().toISOString();
   return {
-    id: nextId++,
+    id,
+    uid: `uid-${id}`,
     deck_id: 1,
     front: `card ${nextId}`,
     back: "a",
     tags: "dsa",
     created_at: now,
     updated_at: now,
+    deleted_at: null,
     deck_name: "Revision",
     state: "review",
     due_at: now,
@@ -82,8 +85,8 @@ describe("derive", () => {
     const now = new Date();
     const yesterday = new Date(now.getTime() - 86_400_000);
     const reviews: ReviewRow[] = [
-      { id: 1, card_id: 1, grade: 3, created_at: now.toISOString() },
-      { id: 2, card_id: 1, grade: 3, created_at: yesterday.toISOString() },
+      { id: 1, uid: "r1", card_id: 1, grade: 3, created_at: now.toISOString() },
+      { id: 2, uid: "r2", card_id: 1, grade: 3, created_at: yesterday.toISOString() },
     ];
     const { cells, counts } = heatGrid(reviews, 4);
     expect(counts.get(localDateKey(now))).toBe(1);
@@ -95,7 +98,7 @@ describe("derive", () => {
 
   it("breaks the streak on a missing day", () => {
     const twoDaysAgo: ReviewRow[] = [
-      { id: 1, card_id: 1, grade: 3, created_at: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+      { id: 1, uid: "r1", card_id: 1, grade: 3, created_at: new Date(Date.now() - 2 * 86_400_000).toISOString() },
     ];
     expect(streakLength(twoDaysAgo)).toBe(0);
   });

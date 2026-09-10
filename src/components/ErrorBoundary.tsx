@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { invokeTauri, isTauriRuntime } from "../lib/platform";
 
 type State = { error: { message: string; stack?: string } | null };
 
@@ -40,11 +41,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   private report(err: unknown) {
     const message = err instanceof Error ? `${err.message}${err.stack ? `\n${err.stack.split("\n").slice(1, 4).join("\n")}` : ""}` : String(err);
     console.error("[recall]", message);
-    const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
-    if (isTauri) {
-      import("@tauri-apps/api/core")
-        .then(({ invoke }) => invoke("debug_log", { msg: `[error] ${message}` }).catch(() => {}))
-        .catch(() => {});
+    if (isTauriRuntime()) {
+      void invokeTauri("debug_log", { msg: `[error] ${message}` }).catch(() => {});
     }
   }
 

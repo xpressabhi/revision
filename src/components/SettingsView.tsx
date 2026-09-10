@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { SHORTCUTS } from "../lib/hotkeys";
 import { STALE_OPTIONS } from "../lib/session";
 import { Icon } from "./ui";
@@ -34,6 +34,7 @@ type Props = {
   onAutoEnd: (v: boolean) => void;
   cardCount: number;
   reviewCount: number;
+  syncPanel: ReactNode;
 };
 
 const THEMES: { id: ThemeId; name: string; sub: string; swatches: string[]; fg: string }[] = [
@@ -148,6 +149,8 @@ export function SettingsView(p: Props) {
             </button>
           </div>
         </div>
+
+        {p.syncPanel}
 
         <div className="set-card">
           <h3>Desktop integration</h3>

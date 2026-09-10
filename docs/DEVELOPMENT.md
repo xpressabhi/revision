@@ -6,7 +6,8 @@ For agent maintenance details (release checklist, gesture architecture, gotchas)
 
 - **Tauri 2** + **React 19** + **TypeScript** + **Vite 7** + **KaTeX**
 - **Rust** backend: `tauri-plugin-sql` (sqlite), `dialog`, `fs`
-- Frontend DB abstraction: `src/lib/db.ts` — auto-falls back to `localStorage` when run as plain web
+- Frontend DB abstraction: `src/lib/db.ts` — picks the SQLite driver under Tauri, otherwise the Dexie/IndexedDB driver (`src/lib/db/idb.ts`)
+- Sync: `src/lib/sync.ts` (pure merge) + `src/lib/syncFile.ts` (file I/O: Tauri path vs browser File System Access / download)
 - Styling: custom design system in `src/App.css` (CSS variables, 4 themes, 3 density scalars, reduced-motion support)
 
 ## Run & build
@@ -18,17 +19,17 @@ npm install
 # Desktop (Tauri) — recommended (macOS overlay titlebar + vibrancy)
 npm run tauri dev
 
-# Or preview in browser only (uses localStorage, no Rust needed)
+# Or preview in browser only (IndexedDB, no Rust needed)
 npm run dev              # http://localhost:1420
 
 # Build native binary
 npm run tauri build      # .dmg / .exe in src-tauri/target/release/bundle/
-npm run build            # web build only -> dist/
+npm run build            # web build only -> dist/ (same output Vercel deploys)
 ```
 
 Requires Rust 1.70+ and system deps (Xcode CLI tools on macOS).
 
-**Verification:** `npm test` (Vitest, pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `backup`) plus `npm run build` (tsc strict + vite). There are no component/DOM tests yet.
+**Verification:** `npm test` (Vitest — `fsrs`, `derive`, `csv`, `markdown`, `session`, `backup`, `sync`, and the IndexedDB adapter via `fake-indexeddb`) plus `npm run build` (tsc strict + vite). There are no component/DOM tests yet; use the dev server + Playwright MCP for manual checks.
 
 ## Project layout
 
@@ -39,10 +40,15 @@ revision/
     App.css                 # design system: tokens (4 themes), components, motion
     components/             # Sidebar, CommandBar, Inspector, Dashboard, ReviewView,
                             # EditorModal, BrowseView, AnalyticsView, SettingsView,
-                            # QuickCapture, ImportModal, Toast, ui (icons/ring/keycaps)
+                            # QuickCapture, ImportModal, SyncPanel, Toast, ui
     lib/
       fsrs.ts               # FSRS-5 scheduler + interval/retrievability predictions
-      db.ts / db.browser.ts # SQLite (Tauri) + localStorage build, chosen at boot
+      db.ts                 # repository facade: SQLite (Tauri) or Dexie/IndexedDB (web)
+      db/idb.ts             # IndexedDB adapter (Dexie), localStorage migration, multi-tab refresh
+      sync.ts               # pure two-way merge (stable uids, tombstones, review union)
+      syncFile.ts           # sync file I/O: Tauri path / File System Access / download
+      platform.ts           # runtime guards (isTauriRuntime, invokeTauri, openExternal)
+      ids.ts                # stable uids + device id
       gestures.ts           # drag-gesture hook (tap/flip/grade, fly-out, spring-back)
       backup.ts             # JSON backup/restore + auto-snapshot before destructive ops
       anki.ts               # Anki collection reader (via Rust staging + sql plugin)
@@ -61,6 +67,29 @@ revision/
   CHANGELOG.md              # release history
   AGENTS.md                 # agent instructions (release checklist, gotchas)
 ```
+
+## Web app & Vercel
+
+`npm run build` produces a static SPA in `dist/` that runs entirely in the browser on IndexedDB (Dexie). `vercel.json` pins framework/build/output and immutable asset caching; there is no router, so no rewrites are needed.
+
+1. In Vercel: **Add New → Project → import this GitHub repo** (framework auto-detects Vite; build `npm run build`, output `dist`). Every push to `main` deploys to production, PRs get preview URLs.
+2. Optional: set a custom domain in Vercel → Domains.
+3. Run the web app (**Settings → Sync**) and the desktop app (**Settings → Sync**) against the same JSON file to keep both in sync.
+
+Notes:
+
+- Browser storage: IndexedDB database `revision` (`cards`, `states`, `reviews`, `decks`). Legacy browser builds that used `localStorage` (`revision_*` keys) migrate automatically on first load.
+- Web-only limits: Anki import, tray, global `⌥⇧K` and launch-at-login are desktop-only; everything else (FSRS review, imports, backups, CSV, analytics) works in the browser.
+- Safari/Firefox lack the File System Access API, so Sync falls back to **Export** / **Import / merge** buttons.
+- The whole web bundle is Tauri-free: `src/lib/platform.ts` loads Tauri APIs dynamically behind `isTauriRuntime()`.
+
+## Sync architecture (for maintainers)
+
+- **Identity**: every card and review carries `uid` (UUID) in both drivers; the DB `id` stays local. Old rows are backfilled on migration.
+- **Deletions**: cards are soft-deleted (`cards.deleted_at`) instead of removed, so tombstones can travel through the sync file and propagate.
+- **Merge** (`src/lib/sync.ts`, pure and unit-tested): union cards by `uid`; content merges last-write-wins on `updated_at`; scheduling state merges independently on `state_updated_at`; a tombstone wins unless the other side edited after it; reviews are an append-only union deduped by `uid`.
+- **Apply**: `applySyncSnapshot` replaces the local store from the merged snapshot in one transaction, preserving local ids by `uid`.
+- **Backups are the same format** (`kind: "revision-backup"` vs `"revision-sync"`); legacy v1 backups are upgraded on import (`parseSyncFile`).
 
 ## Release process
 

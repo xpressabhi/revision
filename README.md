@@ -1,23 +1,35 @@
-# Revision — Active Recall (Tauri + SQLite)
+# Revision — Active Recall (Tauri + SQLite + Web)
 
 [![Release](https://img.shields.io/github/v/release/xpressabhi/revision?label=latest%20release&style=flat-square)](https://github.com/xpressabhi/revision/releases/latest)
 [![Build](https://github.com/xpressabhi/revision/actions/workflows/release.yml/badge.svg)](https://github.com/xpressabhi/revision/actions/workflows/release.yml)
 
-Local-first desktop app for principal-level interview prep. **FSRS-5 spaced repetition** for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral** — a keyboard-first, glassmorphic macOS app with drag gestures.
+Local-first study app for principal-level interview prep. **FSRS-5 spaced repetition** for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral** — a keyboard-first, glassmorphic app for macOS, Windows and the browser, with drag gestures.
 
-> Core features work fully offline: single SQLite file `revision.db` (Tauri) or `localStorage` (browser preview). No account, no telemetry, no network. Everything imports a file you pick; nothing is uploaded.
+> Core features work fully offline. Desktop keeps a single SQLite file `revision.db`; the web app keeps everything in the browser (IndexedDB). No account, no telemetry, no network — and you can **sync both through one JSON file** you control.
+
+---
+
+## Web app
+
+The same React app runs as a static site (Vercel) and stores cards in **IndexedDB** — no server, no database, no account. Open it, study, and sync back to the desktop app whenever you want:
+
+1. In the desktop app: **Settings → Sync → Attach sync file…** (e.g. `~/Documents/revision-sync.json`).
+2. In the web app: **Settings → Sync → Attach sync file…** and pick the same file (Chromium; Safari/Firefox fall back to export/import buttons).
+3. Hit **Sync now** on either side. Cards match by a stable id, the newest edit wins, review history is merged and deletions propagate.
+
+Deploying the web app is one Vercel project pointing at this repo — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#web-app--vercel).
 
 ---
 
 ## Download & Install
 
-Latest: **v0.6.0** — releases are built automatically from `v*` tags (see [releases](https://github.com/xpressabhi/revision/releases)). See [CHANGELOG.md](CHANGELOG.md) for what's new per version.
+Latest: **v0.7.0** — releases are built automatically from `v*` tags (see [releases](https://github.com/xpressabhi/revision/releases)). See [CHANGELOG.md](CHANGELOG.md) for what's new per version.
 
 | Platform | Installer | Size |
 |---|---|---|
-| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.6.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_aarch64.dmg) | 8.1 MB |
-| macOS Intel | [Revision_0.6.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64.dmg) | 8.3 MB |
-| Windows | [Revision_0.6.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.6.0_x64_en-US.msi) | 5.2 MB · 6.7 MB |
+| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.7.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_aarch64.dmg) | 8.1 MB |
+| macOS Intel | [Revision_0.7.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64.dmg) | 8.3 MB |
+| Windows | [Revision_0.7.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64_en-US.msi) | 5.2 MB · 6.7 MB |
 
 Tiny app — every installer is under 9 MB (the old 41 MB MediaPipe bundle is gone).
 
@@ -31,6 +43,7 @@ macOS: open the .dmg and drag Revision to Applications (first launch: right-clic
 - **Leech detection**: cards that lapse 6+ times surface as a "Leeches" queue
 - **Card history**: every grade per card is listed in the inspector
 - **Backups**: export/import full JSON state (scheduling included) plus automatic pre-destructive snapshots
+- **Web app + file sync**: run in the browser (IndexedDB, no install) and sync with the desktop app through one JSON file — manual button, newest edit wins, reviews merged
 - **Keyboard-first everything**: Space reveal, 1–4 grade, G cloze reveal, ⇧G undo, ⌃→ skip, ⌘K command bar, global ⌥⇧K quick capture (desktop)
 - **Cloze deletions + LaTeX + images**: `{{c1::answer}}` progressive reveal, KaTeX rendering, paste images into cards
 - **Dashboards & analytics**: 53-week streak heatmap, retention forecast, grade mix, 30-day pass rate, exam-date planner

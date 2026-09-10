@@ -16,6 +16,7 @@ import {
   deduplicateCards,
   initDb,
   getReviews,
+  onExternalChange,
 } from "./lib/db";
 import { nextState } from "./lib/fsrs";
 import type { CardState, CardWithState, DeckStats, Grade, ReviewRow, View } from "./lib/types";
@@ -27,7 +28,20 @@ import { matchesChord, scopeKeys } from "./lib/hotkeys";
 import { AUTO_END_DEFAULT_MIN, isAutoEnd, isStale, SWEEP_MS, STALE_DEFAULT, STALE_OPTIONS, type StaleThreshold } from "./lib/session";
 import { autoBackupAt, buildBackup, downloadBackup, loadAutoBackup, parseBackupFile, saveAutoBackup } from "./lib/backup";
 import { DEFAULT_DIFFICULTY, DEFAULT_STABILITY } from "./lib/fsrs";
-import { invoke } from "@tauri-apps/api/core";
+import { isTauriRuntime, invokeTauri, onTauriEvent } from "./lib/platform";
+import { describeStats } from "./lib/sync";
+import {
+  attachSyncTarget,
+  detachSyncTarget,
+  exportSyncText,
+  getSyncTargetInfo,
+  lastSyncAt,
+  markSynced,
+  readSyncTarget,
+  syncWithText,
+  writeSyncTarget,
+  type SyncTargetInfo,
+} from "./lib/syncFile";
 import "./App.css";
 
 import { Sidebar } from "./components/Sidebar";
@@ -42,6 +56,7 @@ import { EditorModal } from "./components/EditorModal";
 import { QuickCapture } from "./components/QuickCapture";
 import { ImportModal } from "./components/ImportModal";
 import { Toasts, type ToastMsg } from "./components/Toast";
+import { SyncPanel } from "./components/SyncPanel";
 import { Icon, Keycap } from "./components/ui";
 
 type SidebarMode = "full" | "rail" | "hidden";
@@ -94,7 +109,7 @@ const VIEW_LABEL: Record<View, string> = {
 let toastSeq = 1;
 
 export default function App() {
-  const [isTauri, setIsTauri] = useState(false);
+  const [isTauri] = useState(() => isTauriRuntime());
   const [loading, setLoading] = useState(true);
   const [decks, setDecks] = useState<{ id: number; name: string; created_at: string }[]>([]);
   const [cards, setCards] = useState<CardWithState[]>([]);
@@ -135,6 +150,9 @@ export default function App() {
     return (STALE_OPTIONS.some((o) => o.value === v) ? v : STALE_DEFAULT) as StaleThreshold;
   });
   const [autoEndOn, setAutoEndOn] = useState<boolean>(() => localStorage.getItem("recall_stale_autoend") !== "0");
+  const [syncTarget, setSyncTarget] = useState<SyncTargetInfo>({ mode: "download", label: null, canAttach: false });
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(() => lastSyncAt());
 
   const [review, setReview] = useState<ReviewState | null>(null);
   const lastTouchRef = useRef(Date.now());
@@ -162,13 +180,13 @@ export default function App() {
       const due = s.reduce((x, y) => x + y.due, 0);
       const newCount = s.reduce((x, y) => x + y.newCount, 0);
       const total = s.reduce((x, y) => x + y.total, 0);
-      if (typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)) {
-        invoke("update_tray", { due, new: newCount, total }).catch(() => {});
+      if (isTauri) {
+        void invokeTauri("update_tray", { due, new: newCount, total }).catch(() => {});
       }
     } catch (e) {
       toast(`Could not load data: ${String(e).slice(0, 100)}`, "error");
     }
-  }, [toast]);
+  }, [toast, isTauri]);
 
   // ── boot ──
   const bootedRef = useRef(false);
@@ -178,8 +196,6 @@ export default function App() {
     (async () => {
       try {
         await initDb();
-        const tauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
-        setIsTauri(tauri);
         const d = await getDecks();
         const a = await getAllCardsWithState();
         if (a.length > 0) {
@@ -190,7 +206,8 @@ export default function App() {
           toast(`Seeded ${created} starter cards`, "success");
         }
         await refresh();
-        if (tauri) {
+        setSyncTarget(await getSyncTargetInfo());
+        if (isTauri) {
           try {
             const { isEnabled } = await import("@tauri-apps/plugin-autostart");
             setAutostart(await isEnabled());
@@ -203,26 +220,34 @@ export default function App() {
         setLoading(false);
       }
     })();
-  }, [refresh, toast]);
+  }, [refresh, toast, isTauri]);
 
   // ── tray + global capture → review / capture ──
   const startReviewRef = useRef<(scope: StudyScope) => void>(() => {});
   useEffect(() => {
     if (!isTauri) return;
-    let unlistenTray: (() => void) | undefined;
-    let unlistenCapture: (() => void) | undefined;
+    let cancelled = false;
+    const unlisteners: (() => void)[] = [];
     (async () => {
       try {
-        const { listen } = await import("@tauri-apps/api/event");
-        unlistenTray = await listen("tray-review", () => startReviewRef.current({ kind: "all" }));
-        unlistenCapture = await listen("global-capture", () => setCaptureOpen(true));
+        const tray = await onTauriEvent("tray-review", () => startReviewRef.current({ kind: "all" }));
+        const capture = await onTauriEvent("global-capture", () => setCaptureOpen(true));
+        if (cancelled) {
+          tray();
+          capture();
+        } else {
+          unlisteners.push(tray, capture);
+        }
       } catch {}
     })();
     return () => {
-      unlistenTray?.();
-      unlistenCapture?.();
+      cancelled = true;
+      for (const un of unlisteners) un();
     };
   }, [isTauri]);
+
+  // ── refresh when another tab writes (IndexedDB has no storage event) ──
+  useEffect(() => onExternalChange(() => void refresh()), [refresh]);
 
   // ── theme / density / settings side effects ──
   useEffect(() => {
@@ -496,7 +521,7 @@ export default function App() {
         saved = false;
         toast(`Grade could not be saved: ${String(e).slice(0, 80)}`, "error");
       }
-      const row = { id: nextLocalReviewId(), card_id: card.id, grade: g, created_at: new Date().toISOString() };
+      const row = { id: nextLocalReviewId(), uid: "local", card_id: card.id, grade: g, created_at: new Date().toISOString() };
       patchCard(card.id, { due_at: ns.due_at, interval: ns.interval, ease: ns.ease, reps: ns.reps, state: ns.state, stability: ns.stability, difficulty: ns.difficulty, updated_at: ns.updated_at });
       if (saved) setReviews((rs) => [...rs, row]);
       const nextIdx = nextActiveIdx(r.queue, r.idx + 1, r.buried);
@@ -844,12 +869,12 @@ export default function App() {
         filters: [{ name: "Anki", extensions: ["apkg", "anki2", "anki21", "zip"] }],
       });
       if (!selected || Array.isArray(selected)) return;
-      const rel = await invoke<string>("stage_anki_db", { path: selected });
+      const rel = await invokeTauri<string>("stage_anki_db", { path: selected });
       const { parseAnkiCollection } = await import("./lib/anki");
       const rows = await parseAnkiCollection(rel);
       if (!rows.length) throw new Error("No cards found in this Anki deck");
       const created = await importCards(decks[0]?.id ?? 1, rows);
-      await invoke("cleanup_anki_import").catch(() => {});
+      await invokeTauri("cleanup_anki_import").catch(() => {});
       await refresh();
       toast(`Imported ${created} cards from Anki`, "success");
       setImportOpen(false);
@@ -903,6 +928,76 @@ export default function App() {
     toast("Auto-backup restored", "success");
   };
 
+  // ═══ file sync (web ↔ desktop) ═══
+  const refreshSyncTarget = async () => setSyncTarget(await getSyncTargetInfo());
+
+  const onAttachSync = async () => {
+    try {
+      const label = await attachSyncTarget();
+      await refreshSyncTarget();
+      if (label) toast(`Sync file attached: ${label}`, "success");
+    } catch (e) {
+      toast(`Could not attach sync file: ${String(e).slice(0, 140)}`, "error");
+    }
+  };
+
+  const onDetachSync = async () => {
+    await detachSyncTarget();
+    await refreshSyncTarget();
+    toast("Sync file detached", "info");
+  };
+
+  const onSyncNow = async () => {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    try {
+      const remote = await readSyncTarget();
+      if (remote) {
+        const { stats, merged } = await syncWithText(remote);
+        await writeSyncTarget(JSON.stringify(merged));
+        toast(`Synced: ${describeStats(stats)}`, "success");
+      } else {
+        await writeSyncTarget(await exportSyncText());
+        toast(syncTarget.mode === "download" ? "Sync file downloaded" : "Sync file created", "success");
+      }
+      setLastSync(markSynced());
+      await refresh();
+    } catch (e) {
+      toast(`Sync failed: ${String(e).slice(0, 140)}`, "error");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const onExportSync = async () => {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    try {
+      await writeSyncTarget(await exportSyncText());
+      toast(syncTarget.mode === "download" ? "Sync file downloaded" : "Sync file written", "success");
+    } catch (e) {
+      toast(`Export failed: ${String(e).slice(0, 140)}`, "error");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const onImportSyncFile = async (file: File) => {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    try {
+      const { stats, merged } = await syncWithText(await file.text());
+      if (syncTarget.label) await writeSyncTarget(JSON.stringify(merged));
+      setLastSync(markSynced());
+      await refresh();
+      toast(`Merged: ${describeStats(stats)}`, "success");
+    } catch (e) {
+      toast(`Merge failed: ${String(e).slice(0, 140)}`, "error");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
   // ═══ command palette ═══
   const smartActions = useMemo<CmdAction[]>(() => {
     const study = (id: string) => startReview({ kind: "smart", id: id as "due" | "new" | "learning" | "stuck" | "leeches" });
@@ -931,7 +1026,8 @@ export default function App() {
     { id: "focus", ico: "focus", title: "Toggle focus mode", sub: "hide all chrome", group: "Actions", tags: ["⌘⇧F"], run: () => setFocusMode((f) => !f) },
     { id: "import", ico: "upload", title: "Import cards", sub: "CSV, bookmarks, paste, Anki", group: "Actions", run: () => setImportOpen(true) },
     { id: "export", ico: "download", title: "Export CSV", group: "Actions", run: () => void exportCsv() },
-  ], [sidebarMode, inspectorOpen, theme]);
+    { id: "sync-now", ico: "refresh", title: "Sync now", sub: syncTarget.label ?? "download sync file", group: "Actions", run: () => void onSyncNow() },
+  ], [sidebarMode, inspectorOpen, theme, syncTarget.label, onSyncNow]);
 
   const actions = useMemo(() => [...smartActions, ...navActions, ...utilActions], [smartActions, navActions, utilActions]);
 
@@ -1110,6 +1206,20 @@ export default function App() {
               onAutoEnd={setAutoEndOn}
               cardCount={cards.length}
               reviewCount={reviews.length}
+              syncPanel={
+                <SyncPanel
+                  mode={syncTarget.mode}
+                  label={syncTarget.label}
+                  canAttach={syncTarget.canAttach}
+                  lastSyncAt={lastSync}
+                  busy={syncBusy}
+                  onAttach={() => void onAttachSync()}
+                  onDetach={() => void onDetachSync()}
+                  onSyncNow={() => void onSyncNow()}
+                  onExport={() => void onExportSync()}
+                  onImportFile={(f) => void onImportSyncFile(f)}
+                />
+              }
             />
           )}
         </main>

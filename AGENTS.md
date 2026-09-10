@@ -1,19 +1,19 @@
 # AGENTS.md — guidance for AI agents working in this repo
 
-Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + React 19 + TypeScript + Vite 7 + KaTeX**, FSRS-5 scheduler, SQLite via `tauri-plugin-sql` (with a `localStorage` build for plain-browser runs).
+Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + React 19 + TypeScript + Vite 7 + KaTeX**, FSRS-5 scheduler, SQLite via `tauri-plugin-sql` on desktop and IndexedDB (Dexie) in the browser build.
 
 ## Commands
 
 | Task | Command |
 |---|---|
-| Browser-only dev (no Rust, uses localStorage) | `npm run dev` → http://localhost:1420 |
+| Browser-only dev (no Rust, IndexedDB via Dexie) | `npm run dev` → http://localhost:1420 |
 | Desktop dev (Tauri) | `npm run tauri:dev` |
 | Typecheck + web build | `npm run build` (tsc && vite build) |
 | Unit tests (Vitest) | `npm test` (or `npm run test:watch`) |
 | Tauri debug build only | `npx tauri build --debug` |
 | Install built app to /Applications | `./scripts/install-to-applications.sh` (or `npm run tauri:build:install` = build + install) |
 
-**Verification = `npm test` + `npm run build` + manual/dev-server checks.** Vitest covers the pure libs (`fsrs`, `derive`, `csv`, `markdown`, `session`, `backup`); there are no component/DOM tests. Playwright MCP against `http://localhost:1420` works for manual checks (note the dev server may already be running — reuse it, don't start a second one).
+**Verification = `npm test` + `npm run build` + manual/dev-server checks.** Vitest covers the pure libs (`fsrs`, `derive`, `csv`, `markdown`, `session`, `backup`, `sync`) plus the IndexedDB adapter (`db.test.ts`, `db.migration.test.ts` with `fake-indexeddb`); there are no component/DOM tests. Playwright MCP against `http://localhost:1420` works for manual checks (note the dev server may already be running — reuse it, don't start a second one).
 
 ## Releasing (READ FIRST — version lives in 3 places)
 
@@ -31,9 +31,11 @@ Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + Reac
 
 ## Architecture
 
-- `src/App.tsx` — shell: 3-pane layout, global keyboard handler, review state machine, toasts. `src/lib/` — pure logic (fsrs, db, derive, markdown, backup, anki, hotkeys, search, csv). `src/components/` — views (Dashboard, ReviewView, BrowseView, AnalyticsView, SettingsView, EditorModal, QuickCapture, CommandBar, Inspector, Sidebar, ImportModal, Toast, ui).
+- `src/App.tsx` — shell: 3-pane layout, global keyboard handler, review state machine, toasts. `src/lib/` — pure logic (fsrs, db, derive, markdown, backup, sync, anki, hotkeys, search, csv). `src/components/` — views (Dashboard, ReviewView, BrowseView, AnalyticsView, SettingsView, EditorModal, QuickCapture, CommandBar, Inspector, Sidebar, ImportModal, SyncPanel, Toast, ui).
 - Review mapping: hidden card → flip (Space/Enter/click/flick); shown card → grade 1–4 (keys 1–4, Space grades Good, drag directions ← Again · → Good · ↑ Easy · ↓ Hard).
-- DB: `src/lib/db.ts` (SQLite via Tauri) with `db.browser.ts` (localStorage) build — keep both in sync when changing schema/fields. The adapter is chosen once at boot; there is no per-call fallback.
+- DB: `src/lib/db.ts` is the repository facade; it delegates to the SQLite driver (Tauri) or `src/lib/db/idb.ts` (Dexie/IndexedDB web). Both must implement the same API. Every card/review has a stable `uid`; cards are soft-deleted via `deleted_at` (tombstones) so deletions can sync.
+- Sync: `src/lib/sync.ts` is the pure merge (unit-tested); `src/lib/syncFile.ts` does file I/O (Tauri `plugin-fs` path vs browser File System Access / download). Both apps exchange one JSON file; no backend. Keep backup (`kind: "revision-backup"`) and sync (`kind: "revision-sync"`) formats compatible; legacy v1 backups are normalized by `parseSyncFile`.
+- Web deploy: Vercel auto-builds `npm run build` → `dist` via `vercel.json`. `src/lib/platform.ts` keeps Tauri imports dynamic so the web bundle never loads them.
 - Backups: `src/lib/backup.ts` (JSON export/import + `recall_autobackup` snapshot before destructive ops). Anki import: Rust `stage_anki_db` (zip/zstd) + `src/lib/anki.ts` (reads the staged SQLite through the sql plugin).
 - macOS app bundle lives at `/Applications/Revision.app` (installed via script).
 
