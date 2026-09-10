@@ -14,9 +14,11 @@ type Props = {
   onStudyAll: () => void;
   onBrowseGroup: (group: string) => void;
   onNewCard: () => void;
+  getStarted?: { done: number; total: number; onOpen: () => void; onDismiss: () => void };
+  onOpenGuide?: () => void;
 };
 
-export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention, newPerDay, onStudyGroup, onStudyAll, onBrowseGroup, onNewCard }: Props) {
+export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention, newPerDay, onStudyGroup, onStudyAll, onBrowseGroup, onNewCard, getStarted, onOpenGuide }: Props) {
   const streak = useMemo(() => streakLength(reviews), [reviews]);
   const grid = useMemo(() => heatGrid(reviews), [reviews]);
   const forecast = useMemo(() => retentionForecast(cards, lastReview), [cards, lastReview]);
@@ -36,6 +38,15 @@ export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention
           <button className="btn btn-primary" onClick={onStudyAll}><Icon name="bolt" size={13} /> Study all</button>
         </div>
       </div>
+
+      {getStarted && (
+        <div className="getstarted-banner">
+          <Icon name="sparkles" size={15} />
+          <span className="gb-text"><b>Get started</b> — {getStarted.done}/{getStarted.total} steps done</span>
+          <button className="btn btn-sm btn-primary" onClick={getStarted.onOpen}>Resume setup</button>
+          <button className="btn-ghost btn-sm" onClick={getStarted.onDismiss} aria-label="Hide setup checklist">Hide</button>
+        </div>
+      )}
 
       <div className="kpi-row">
         <div className="kpi"><span className="k accent">{streak}</span><span className="l">day streak</span></div>
@@ -87,9 +98,14 @@ export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention
             <DeckCard key={g.full} group={g} index={i} onStudy={() => onStudyGroup(g.full)} onBrowse={() => onBrowseGroup(g.full)} />
           ))}
           {groups.length === 0 && (
-            <div className="empty-state" style={{ gridColumn: "1 / -1" }}>
+            <div className="empty-state" style={{ gridColumn: "1 / -1", flexDirection: "column" }}>
               <span className="es-ico"><Icon name="book" size={26} /></span>
-              No decks yet. Create a card or load demo content (Settings, Content).
+              <span>No cards yet. Create one, import a file, or load demo content (Settings → Data).</span>
+              {onOpenGuide && (
+                <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={onOpenGuide}>
+                  <Icon name="sparkles" size={12} /> Open setup guide
+                </button>
+              )}
             </div>
           )}
         </div>

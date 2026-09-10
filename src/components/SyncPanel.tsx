@@ -23,7 +23,7 @@ export function SyncPanel(p: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="set-card">
+    <div className="set-card" id="sync-panel">
       <h3>Sync</h3>
       <p>
         {p.mode === "desktop"

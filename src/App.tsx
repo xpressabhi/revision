@@ -28,8 +28,22 @@ import { matchesChord, scopeKeys } from "./lib/hotkeys";
 import { AUTO_END_DEFAULT_MIN, isAutoEnd, isStale, SWEEP_MS, STALE_DEFAULT, STALE_OPTIONS, type StaleThreshold } from "./lib/session";
 import { autoBackupAt, buildBackup, downloadBackup, loadAutoBackup, parseBackupFile, saveAutoBackup } from "./lib/backup";
 import { DEFAULT_DIFFICULTY, DEFAULT_STABILITY } from "./lib/fsrs";
-import { isTauriRuntime, invokeTauri, onTauriEvent } from "./lib/platform";
+import { isTauriRuntime, invokeTauri, onTauriEvent, openExternal } from "./lib/platform";
 import { describeStats } from "./lib/sync";
+import {
+  dismiss as dismissGetStarted,
+  doneCount,
+  GUIDE_STEP_IDS,
+  isComplete as isGetStartedComplete,
+  loadState as loadGetStarted,
+  markSeen as markGetStartedSeen,
+  markStep as markGetStartedStep,
+  saveState as saveGetStarted,
+  type GetStartedState,
+  type GuideAction,
+  type GuideStepId,
+} from "./lib/getStarted";
+import { RELEASES_URL, WEB_APP_URL } from "./lib/links";
 import {
   attachSyncTarget,
   detachSyncTarget,
@@ -57,6 +71,7 @@ import { QuickCapture } from "./components/QuickCapture";
 import { ImportModal } from "./components/ImportModal";
 import { Toasts, type ToastMsg } from "./components/Toast";
 import { SyncPanel } from "./components/SyncPanel";
+import { GetStarted } from "./components/GetStarted";
 import { Icon, Keycap } from "./components/ui";
 
 type SidebarMode = "full" | "rail" | "hidden";
@@ -153,6 +168,8 @@ export default function App() {
   const [syncTarget, setSyncTarget] = useState<SyncTargetInfo>({ mode: "download", label: null, canAttach: false });
   const [syncBusy, setSyncBusy] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(() => lastSyncAt());
+  const [guide, setGuide] = useState<GetStartedState>(() => loadGetStarted());
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const [review, setReview] = useState<ReviewState | null>(null);
   const lastTouchRef = useRef(Date.now());
@@ -169,6 +186,20 @@ export default function App() {
     const id = toastSeq++;
     setToasts((ts) => [...ts.slice(-3), { id, kind, text, undo }]);
   }, []);
+
+  const updateGuide = useCallback((fn: (s: GetStartedState) => GetStartedState) => {
+    setGuide((s) => saveGetStarted(fn(s)));
+  }, []);
+  const markGuideStep = useCallback((id: GuideStepId) => updateGuide((s) => markGetStartedStep(s, id)), [updateGuide]);
+  const openGuide = useCallback(() => {
+    updateGuide(markGetStartedSeen);
+    setGuideOpen(true);
+  }, [updateGuide]);
+  const closeGuide = useCallback(() => setGuideOpen(false), []);
+  const dismissGuideForever = useCallback(() => {
+    updateGuide((s) => dismissGetStarted(s, true));
+    setGuideOpen(false);
+  }, [updateGuide]);
 
   const refresh = useCallback(async () => {
     try {
@@ -218,9 +249,14 @@ export default function App() {
         toast(String(e), "error");
       } finally {
         setLoading(false);
+        const gs = loadGetStarted();
+        if (!gs.seen && !gs.hidden) {
+          updateGuide(markGetStartedSeen);
+          window.setTimeout(() => setGuideOpen(true), 700);
+        }
       }
     })();
-  }, [refresh, toast, isTauri]);
+  }, [refresh, toast, isTauri, updateGuide]);
 
   // ── tray + global capture → review / capture ──
   const startReviewRef = useRef<(scope: StudyScope) => void>(() => {});
@@ -248,6 +284,11 @@ export default function App() {
 
   // ── refresh when another tab writes (IndexedDB has no storage event) ──
   useEffect(() => onExternalChange(() => void refresh()), [refresh]);
+
+  // ── visiting settings counts as the "tune it" step ──
+  useEffect(() => {
+    if (view === "settings") markGuideStep("settings");
+  }, [view, markGuideStep]);
 
   // ── theme / density / settings side effects ──
   useEffect(() => {
@@ -524,6 +565,7 @@ export default function App() {
       const row = { id: nextLocalReviewId(), uid: "local", card_id: card.id, grade: g, created_at: new Date().toISOString() };
       patchCard(card.id, { due_at: ns.due_at, interval: ns.interval, ease: ns.ease, reps: ns.reps, state: ns.state, stability: ns.stability, difficulty: ns.difficulty, updated_at: ns.updated_at });
       if (saved) setReviews((rs) => [...rs, row]);
+      markGuideStep("review");
       const nextIdx = nextActiveIdx(r.queue, r.idx + 1, r.buried);
       setReview((cur) =>
         cur
@@ -701,6 +743,7 @@ export default function App() {
         toast("Card created", "success");
         await refresh();
       }
+      markGuideStep("cards");
     } catch (e) {
       toast(`Could not save card: ${String(e).slice(0, 80)}`, "error");
       throw e;
@@ -781,6 +824,7 @@ export default function App() {
     }
     const created = await bulkCreateCards(rows.map(({ deck, ...rest }) => ({ deckName: deck, ...rest })));
     await refresh();
+    markGuideStep("cards");
     toast(`Imported ${created} cards`, "success");
     setImportOpen(false);
   };
@@ -801,6 +845,7 @@ export default function App() {
       added++;
     }
     await refresh();
+    markGuideStep("cards");
     toast(`Imported ${added} bookmarks`, "success");
     setImportOpen(false);
   };
@@ -848,6 +893,7 @@ export default function App() {
       }
       const created = await bulkCreateCards(rows);
       await refresh();
+      markGuideStep("cards");
       toast(`Imported ${created} cards`, "success");
       setImportOpen(false);
     } catch (e) {
@@ -876,6 +922,7 @@ export default function App() {
       const created = await importCards(decks[0]?.id ?? 1, rows);
       await invokeTauri("cleanup_anki_import").catch(() => {});
       await refresh();
+      markGuideStep("cards");
       toast(`Imported ${created} cards from Anki`, "success");
       setImportOpen(false);
     } catch (e) {
@@ -935,7 +982,10 @@ export default function App() {
     try {
       const label = await attachSyncTarget();
       await refreshSyncTarget();
-      if (label) toast(`Sync file attached: ${label}`, "success");
+      if (label) {
+        markGuideStep("everywhere");
+        toast(`Sync file attached: ${label}`, "success");
+      }
     } catch (e) {
       toast(`Could not attach sync file: ${String(e).slice(0, 140)}`, "error");
     }
@@ -998,6 +1048,39 @@ export default function App() {
     }
   };
 
+  // ═══ setup guide ═══
+  const onGuideAction = (action: GuideAction, step: GuideStepId) => {
+    markGuideStep(step);
+    setGuideOpen(false);
+    switch (action) {
+      case "review":
+        startReview({ kind: "all" });
+        break;
+      case "newCard":
+        setEditor({ card: null });
+        break;
+      case "import":
+        setImportOpen(true);
+        break;
+      case "settings":
+        setView("settings");
+        break;
+      case "sync":
+        setView("settings");
+        window.setTimeout(() => document.getElementById("sync-panel")?.scrollIntoView({ behavior: "smooth", block: "center" }), 120);
+        break;
+      case "releases":
+        void openExternal(RELEASES_URL).catch(() => {});
+        break;
+      case "webapp":
+        if (WEB_APP_URL) void openExternal(WEB_APP_URL).catch(() => {});
+        break;
+      case "help":
+        setHelpOpen(true);
+        break;
+    }
+  };
+
   // ═══ command palette ═══
   const smartActions = useMemo<CmdAction[]>(() => {
     const study = (id: string) => startReview({ kind: "smart", id: id as "due" | "new" | "learning" | "stuck" | "leeches" });
@@ -1027,7 +1110,8 @@ export default function App() {
     { id: "import", ico: "upload", title: "Import cards", sub: "CSV, bookmarks, paste, Anki", group: "Actions", run: () => setImportOpen(true) },
     { id: "export", ico: "download", title: "Export CSV", group: "Actions", run: () => void exportCsv() },
     { id: "sync-now", ico: "refresh", title: "Sync now", sub: syncTarget.label ?? "download sync file", group: "Actions", run: () => void onSyncNow() },
-  ], [sidebarMode, inspectorOpen, theme, syncTarget.label, onSyncNow]);
+    { id: "setup-guide", ico: "book", title: "Setup guide", sub: `${doneCount(guide)}/${GUIDE_STEP_IDS.length} steps done`, group: "Actions", run: openGuide },
+  ], [sidebarMode, inspectorOpen, theme, syncTarget.label, onSyncNow, guide, openGuide]);
 
   const actions = useMemo(() => [...smartActions, ...navActions, ...utilActions], [smartActions, navActions, utilActions]);
 
@@ -1120,6 +1204,17 @@ export default function App() {
               onStudyAll={() => startReview({ kind: "all" })}
               onBrowseGroup={(g) => { setBrowseGroup(g); setView("browse"); }}
               onNewCard={() => setEditor({ card: null })}
+              getStarted={
+                !guide.hidden && !isGetStartedComplete(guide)
+                  ? {
+                      done: doneCount(guide),
+                      total: GUIDE_STEP_IDS.length,
+                      onOpen: openGuide,
+                      onDismiss: () => updateGuide((s) => dismissGetStarted(s, true)),
+                    }
+                  : undefined
+              }
+              onOpenGuide={openGuide}
             />
           )}
           {view === "review" && review && (
@@ -1248,23 +1343,33 @@ export default function App() {
         onAnki={() => void importAnki()}
       />
       {editor && <EditorModal card={editor.card} onSave={saveCard} onClose={() => setEditor(null)} />}
-      {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
+      {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} onSetupGuide={openGuide} />}
+      {guideOpen && (
+        <GetStarted
+          isTauri={isTauri}
+          state={guide}
+          onClose={closeGuide}
+          onDismissForever={dismissGuideForever}
+          onAction={onGuideAction}
+        />
+      )}
       {celebration && <Celebration label={celebration} />}
       <Toasts toasts={toasts} onDone={(id) => setToasts((ts) => ts.filter((t) => t.id !== id))} />
     </div>
   );
 }
 
-function HelpPanel({ onClose }: { onClose: () => void }) {
-  const groups = (["global", "review", "editor", "capture"] as const).map((s) => ({ scope: s, keys: scopeKeys(s) }));
+function HelpPanel({ onClose, onSetupGuide }: { onClose: () => void; onSetupGuide: () => void }) {
+  const helpGroups = (["global", "review", "editor", "capture"] as const).map((s) => ({ scope: s, keys: scopeKeys(s) }));
   return (
     <div className="help-panel" role="dialog" aria-modal="true" aria-label="Keyboard map">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <Icon name="keyboard" size={14} />
         <span style={{ fontWeight: 600, fontSize: 13 }}>Keyboard map</span>
-        <button className="btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose}><Icon name="x" size={12} /></button>
+        <button className="btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={() => { onClose(); onSetupGuide(); }}><Icon name="book" size={12} /> Setup guide</button>
+        <button className="btn-ghost btn-sm" onClick={onClose}><Icon name="x" size={12} /></button>
       </div>
-      {groups.map((g) => (
+      {helpGroups.map((g) => (
         <div className="help-group" key={g.scope}>
           <div className="hg-label">{g.scope}</div>
           {g.keys.map((s) => (
