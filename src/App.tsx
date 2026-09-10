@@ -8,6 +8,7 @@ import {
   deleteCard,
   updateCardState,
   logReview,
+  deleteLastReview,
   bulkCreateCards,
   clearAllCards,
   deduplicateCards,
@@ -41,6 +42,40 @@ import { Icon, Keycap } from "./components/ui";
 type SidebarMode = "full" | "rail" | "hidden";
 type EditorState = { card: CardWithState | null } | null;
 
+type ReviewUndo = { cardId: number; prev: CardState; grade: Grade; reviewId: number; saved: boolean };
+
+type ReviewState = {
+  scope: StudyScope;
+  queue: CardWithState[];
+  idx: number;
+  shown: boolean;
+  revealed: number;
+  hintLevel: number;
+  answered: number;
+  again: number;
+  good: number;
+  buried: Set<number>;
+  undo: ReviewUndo[];
+  stale: boolean;
+};
+
+let localReviewSeq = -1;
+function nextLocalReviewId(): number {
+  return localReviewSeq--;
+}
+
+function nextActiveIdx(queue: CardWithState[], from: number, buried: Set<number>): number {
+  let i = from;
+  while (i < queue.length && buried.has(queue[i].id)) i++;
+  return i;
+}
+
+function prevActiveIdx(queue: CardWithState[], from: number, buried: Set<number>): number {
+  let i = Math.min(from, queue.length - 1);
+  while (i > 0 && buried.has(queue[i].id)) i--;
+  return Math.max(0, i);
+}
+
 const THEME_ORDER: ThemeId[] = ["dark-a", "light-a", "dark-b", "light-b"];
 const VIEW_LABEL: Record<View, string> = {
   dashboard: "Dashboard",
@@ -62,7 +97,10 @@ export default function App() {
   const [view, setView] = useState<View>("dashboard");
   const [theme, setTheme] = useState<ThemeId>(() => (localStorage.getItem("recall_theme") as ThemeId) || "dark-a");
   const [density, setDensity] = useState<"relaxed" | "standard" | "compact">(() => (localStorage.getItem("recall_density") as "relaxed" | "standard" | "compact") || "standard");
-  const [desiredRetention, setDesiredRetention] = useState<number>(() => Number(localStorage.getItem("recall_retention") ?? 0.9));
+  const [desiredRetention, setDesiredRetention] = useState<number>(() => {
+    const v = Number(localStorage.getItem("recall_retention"));
+    return Number.isFinite(v) && v >= 0.5 && v <= 1 ? v : 0.9;
+  });
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("full");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
@@ -84,24 +122,13 @@ export default function App() {
   const [autoEndOn, setAutoEndOn] = useState<boolean>(() => localStorage.getItem("recall_stale_autoend") !== "0");
 
   const [pomo, setPomo] = useState<Pomo>({ seconds: 25 * 60, running: false, mode: "focus" });
-
-  type ReviewState = {
-    scope: StudyScope;
-    queue: CardWithState[];
-    idx: number;
-    shown: boolean;
-    revealed: number;
-    hintLevel: number;
-    answered: number;
-    again: number;
-    good: number;
-    buried: Set<number>;
-    undo: { cardId: number; prev: CardState }[];
-    stale: boolean;
-  };
   const [review, setReview] = useState<ReviewState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTouchRef = useRef(Date.now());
+  const gradingRef = useRef(false);
+
+  const reviewRef = useRef<ReviewState | null>(null);
+  reviewRef.current = review;
 
   const lastReview = useMemo(() => lastReviewMap(reviews), [reviews]);
   const groups = useMemo(() => buildTagTree(cards, lastReview), [cards, lastReview]);
@@ -112,21 +139,28 @@ export default function App() {
   }, []);
 
   const refresh = useCallback(async () => {
-    const [d, s, a, r] = await Promise.all([getDecks(), getDeckStats(), getAllCardsWithState(), getReviews()]);
-    setDecks(d);
-    setStats(s);
-    setCards(a);
-    setReviews(r);
-    const due = s.reduce((x, y) => x + y.due, 0);
-    const newCount = s.reduce((x, y) => x + y.newCount, 0);
-    const total = s.reduce((x, y) => x + y.total, 0);
-    if (isTauri) {
-      invoke("update_tray", { due, new: newCount, total, decks: s.map((x) => ({ name: x.deck_name, due: x.due, total: x.total })) }).catch(() => {});
+    try {
+      const [d, s, a, r] = await Promise.all([getDecks(), getDeckStats(), getAllCardsWithState(), getReviews()]);
+      setDecks(d);
+      setStats(s);
+      setCards(a);
+      setReviews(r);
+      const due = s.reduce((x, y) => x + y.due, 0);
+      const newCount = s.reduce((x, y) => x + y.newCount, 0);
+      const total = s.reduce((x, y) => x + y.total, 0);
+      if (typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)) {
+        invoke("update_tray", { due, new: newCount, total, decks: s.map((x) => ({ name: x.deck_name, due: x.due, total: x.total })) }).catch(() => {});
+      }
+    } catch (e) {
+      toast(`Could not load data: ${String(e).slice(0, 100)}`, "error");
     }
-  }, [isTauri]);
+  }, [toast]);
 
   // ── boot ──
+  const bootedRef = useRef(false);
   useEffect(() => {
+    if (bootedRef.current) return;
+    bootedRef.current = true;
     (async () => {
       try {
         await initDb();
@@ -134,8 +168,11 @@ export default function App() {
         setIsTauri(tauri);
         const d = await getDecks();
         const a = await getAllCardsWithState();
-        if (a.length === 0 && d[0]) {
+        if (a.length > 0) {
+          localStorage.setItem("recall_seeded", "1");
+        } else if (d[0] && localStorage.getItem("recall_seeded") !== "1") {
           const created = await bulkCreateCards(SEED_CARDS.map(({ deck, ...rest }) => ({ deckName: deck, ...rest })));
+          localStorage.setItem("recall_seeded", "1");
           toast(`Seeded ${created} starter cards`, "success");
         }
         await refresh();
@@ -161,19 +198,19 @@ export default function App() {
   }, [refresh, toast]);
 
   // ── tray → review ──
+  const startReviewRef = useRef<(scope: StudyScope) => void>(() => {});
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     if (isTauri) {
       (async () => {
         try {
           const { listen } = await import("@tauri-apps/api/event");
-          unlisten = await listen("tray-review", () => startReview({ kind: "all" }));
+          unlisten = await listen("tray-review", () => startReviewRef.current({ kind: "all" }));
         } catch {}
       })();
     }
     return () => unlisten?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTauri, cards, lastReview]);
+  }, [isTauri]);
 
   // ── theme / density side effects ──
   useEffect(() => {
@@ -204,20 +241,26 @@ export default function App() {
   useEffect(() => {
     if (!pomo.running) return;
     const id = window.setInterval(() => {
-      setPomo((p) => {
-        if (p.seconds <= 1) {
-          if (p.mode === "focus") {
-            toast("Focus session done. Take a 5 min break", "success");
-            return { seconds: 5 * 60, running: false, mode: "break" };
-          }
-          toast("Break over. Ready for the next focus block", "info");
-          return { seconds: 25 * 60, running: false, mode: "focus" };
-        }
-        return { ...p, seconds: p.seconds - 1 };
-      });
+      setPomo((p) =>
+        p.seconds > 1
+          ? { ...p, seconds: p.seconds - 1 }
+          : p.mode === "focus"
+            ? { seconds: 5 * 60, running: false, mode: "break" }
+            : { seconds: 25 * 60, running: false, mode: "focus" }
+      );
     }, 1000);
     return () => window.clearInterval(id);
-  }, [pomo.running, toast]);
+  }, [pomo.running]);
+
+  const prevPomoRef = useRef(pomo);
+  useEffect(() => {
+    const prev = prevPomoRef.current;
+    if (prev.running && !pomo.running && prev.seconds <= 1) {
+      if (prev.mode === "focus") toast("Focus session done. Take a 5 min break", "success");
+      else toast("Break over. Ready for the next focus block", "info");
+    }
+    prevPomoRef.current = pomo;
+  }, [pomo, toast]);
 
   // ── keyboard master ──
   useEffect(() => {
@@ -307,6 +350,7 @@ export default function App() {
         if (!card) return;
         if ((matchesChord(e, "space") || matchesChord(e, "enter")) && !typing) {
           e.preventDefault();
+          if (e.repeat) return;
           if (!review.shown) {
             setReview((r) => (r ? { ...r, shown: true } : r));
           } else {
@@ -316,6 +360,7 @@ export default function App() {
         }
         if (["1", "2", "3", "4"].includes(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
           e.preventDefault();
+          if (e.repeat) return;
           if (!review.shown) {
             setReview((r) => (r ? { ...r, shown: true } : r));
           } else {
@@ -359,31 +404,29 @@ export default function App() {
 
   // ═══ review actions ═══
   const startReview = useCallback((scope: StudyScope) => {
-    setReview((current) => {
-      setView("review");
-      const queue = scopeCards(cards, scope, lastReview);
-      if (queue.length === 0) {
-        toast("Queue clear. Nothing due in this scope", "info");
-        return current;
-      }
-      lastTouchRef.current = Date.now();
-      return {
-        scope,
-        queue,
-        idx: 0,
-        shown: false,
-        revealed: 0,
-        hintLevel: 0,
-        answered: 0,
-        again: 0,
-        good: 0,
-        buried: new Set(),
-        undo: [],
-        stale: false,
-      };
+    const queue = scopeCards(cards, scope, lastReview);
+    if (queue.length === 0) {
+      toast("Queue clear. Nothing due in this scope", "info");
+      return;
+    }
+    lastTouchRef.current = Date.now();
+    setView("review");
+    setReview({
+      scope,
+      queue,
+      idx: 0,
+      shown: false,
+      revealed: 0,
+      hintLevel: 0,
+      answered: 0,
+      again: 0,
+      good: 0,
+      buried: new Set(),
+      undo: [],
+      stale: false,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards, lastReview, toast]);
+  startReviewRef.current = startReview;
 
   const patchCard = (id: number, patch: Partial<CardWithState>) => {
     setCards((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -391,75 +434,104 @@ export default function App() {
   };
 
   const grade = async (g: Grade) => {
-    if (review?.stale) {
+    const r = reviewRef.current;
+    if (r?.stale) {
       resume();
       return;
     }
-    const r = review;
-    if (!r) return;
+    if (!r || gradingRef.current) return;
     const card = r.queue[r.idx];
     if (!card) return;
-    const prev: CardState = {
-      card_id: card.id,
-      due_at: card.due_at,
-      interval: card.interval,
-      ease: card.ease,
-      reps: card.reps,
-      state: card.state,
-      stability: card.stability,
-      difficulty: card.difficulty,
-      updated_at: card.updated_at,
-    };
-    const ns = nextState(prev, g, new Date(), desiredRetention);
-    await updateCardState(ns);
-    await logReview(card.id, g);
-    setReviews((rs) => [...rs, { id: -rs.length, card_id: card.id, grade: g, created_at: new Date().toISOString() }]);
-    patchCard(card.id, { due_at: ns.due_at, interval: ns.interval, ease: ns.ease, reps: ns.reps, state: ns.state, stability: ns.stability, difficulty: ns.difficulty, updated_at: ns.updated_at });
-    setReview((cur) => {
-      if (!cur) return cur;
-      const answered = cur.answered + 1;
-      const next = {
-        ...cur,
-        answered,
-        again: cur.again + (g === 1 ? 1 : 0),
-        good: cur.good + (g >= 3 ? 1 : 0),
-        idx: cur.idx + 1,
-        shown: false,
-        revealed: 0,
-        hintLevel: 0,
-        undo: [...cur.undo.slice(-30), { cardId: card.id, prev }],
+    gradingRef.current = true;
+    try {
+      const prev: CardState = {
+        card_id: card.id,
+        due_at: card.due_at,
+        interval: card.interval,
+        ease: card.ease,
+        reps: card.reps,
+        state: card.state,
+        stability: card.stability,
+        difficulty: card.difficulty,
+        updated_at: card.updated_at,
       };
-      return next;
-    });
-    if (r.idx + 1 >= r.queue.length) {
-      const streak = streakLength([...reviews, { id: 0, card_id: 0, grade: 0, created_at: new Date().toISOString() }]);
-      setCelebration(`+${Math.max(1, streak)} day streak`);
-      window.setTimeout(() => setCelebration(null), 2000);
+      const ns = nextState(prev, g, new Date(), desiredRetention);
+      let saved = true;
+      try {
+        await updateCardState(ns);
+        await logReview(card.id, g);
+      } catch (e) {
+        saved = false;
+        toast(`Grade could not be saved: ${String(e).slice(0, 80)}`, "error");
+      }
+      const row = { id: nextLocalReviewId(), card_id: card.id, grade: g, created_at: new Date().toISOString() };
+      patchCard(card.id, { due_at: ns.due_at, interval: ns.interval, ease: ns.ease, reps: ns.reps, state: ns.state, stability: ns.stability, difficulty: ns.difficulty, updated_at: ns.updated_at });
+      if (saved) setReviews((rs) => [...rs, row]);
+      const nextIdx = nextActiveIdx(r.queue, r.idx + 1, r.buried);
+      setReview((cur) =>
+        cur
+          ? {
+              ...cur,
+              answered: cur.answered + 1,
+              again: cur.again + (g === 1 ? 1 : 0),
+              good: cur.good + (g >= 3 ? 1 : 0),
+              idx: nextIdx,
+              shown: false,
+              revealed: 0,
+              hintLevel: 0,
+              undo: [...cur.undo.slice(-30), { cardId: card.id, prev, grade: g, reviewId: row.id, saved }],
+            }
+          : cur
+      );
+      if (nextIdx >= r.queue.length) {
+        const streak = streakLength(saved ? [...reviews, row] : reviews);
+        setCelebration(`+${Math.max(1, streak)} day streak`);
+        window.setTimeout(() => setCelebration(null), 2000);
+      }
+    } finally {
+      gradingRef.current = false;
     }
   };
 
   const advance = () => {
-    setReview((r) => (r ? { ...r, idx: r.idx + 1, shown: false, revealed: 0 } : r));
+    setReview((r) => (r ? { ...r, idx: nextActiveIdx(r.queue, r.idx + 1, r.buried), shown: false, revealed: 0, hintLevel: 0 } : r));
   };
 
   const undoGrade = () => {
-    setReview((r) => {
-      if (!r || r.undo.length === 0 || r.idx === 0) return r;
-      const last = r.undo[r.undo.length - 1];
-      void updateCardState(last.prev);
-      setReviews((rs) => rs.filter((x) => !(x.card_id === last.cardId && x.id < 0)));
-      return { ...r, undo: r.undo.slice(0, -1), idx: r.idx - 1, shown: false, answered: Math.max(0, r.answered - 1), again: Math.max(0, r.again - (0)), good: Math.max(0, r.good - 0) };
-    });
+    const r = reviewRef.current;
+    if (!r || r.undo.length === 0 || r.idx === 0) return;
+    const last = r.undo[r.undo.length - 1];
+    if (last.saved) {
+      void updateCardState(last.prev).catch(() => toast("Undo could not be saved", "error"));
+      void deleteLastReview(last.cardId).catch(() => {});
+    }
+    setReviews((rs) => rs.filter((x) => x.id !== last.reviewId));
+    const idx = r.queue.findIndex((c) => c.id === last.cardId);
+    setReview((cur) =>
+      cur
+        ? {
+            ...cur,
+            undo: cur.undo.slice(0, -1),
+            idx: idx >= 0 ? idx : prevActiveIdx(cur.queue, cur.idx - 1, cur.buried),
+            shown: false,
+            revealed: 0,
+            hintLevel: 0,
+            answered: Math.max(0, cur.answered - 1),
+            again: Math.max(0, cur.again - (last.grade === 1 ? 1 : 0)),
+            good: Math.max(0, cur.good - (last.grade >= 3 ? 1 : 0)),
+          }
+        : cur
+    );
   };
 
   const buryCard = () => {
-    setReview((r) => {
-      if (!r) return r;
-      const card = r.queue[r.idx];
-      const buried = new Set(r.buried);
-      buried.add(card.id);
-      return { ...r, buried, idx: r.idx + 1, shown: false, revealed: 0 };
-    });
+    const r = reviewRef.current;
+    if (!r) return;
+    const card = r.queue[r.idx];
+    if (!card) return;
+    const buried = new Set(r.buried);
+    buried.add(card.id);
+    setReview({ ...r, buried, idx: nextActiveIdx(r.queue, r.idx + 1, buried), shown: false, revealed: 0, hintLevel: 0 });
   };
 
   const suspendCard = async (card: CardWithState) => {
@@ -476,9 +548,6 @@ export default function App() {
   };
 
   // ═══ activity-aware sessions (step-away handling) ═══
-  const reviewRef = useRef(review);
-  reviewRef.current = review;
-
   const touch = useCallback(() => {
     lastTouchRef.current = Date.now();
   }, []);
@@ -498,11 +567,10 @@ export default function App() {
   }, [resume]);
 
   const markStale = useCallback(() => {
-    setReview((r) => {
-      if (!r || r.stale || r.idx >= r.queue.length) return r;
-      setPomo((p) => (p.running ? { ...p, running: false } : p));
-      return { ...r, stale: true, shown: false, revealed: 0, hintLevel: 0 };
-    });
+    const r = reviewRef.current;
+    if (!r || r.stale || r.idx >= r.queue.length) return;
+    setPomo((p) => (p.running ? { ...p, running: false } : p));
+    setReview((cur) => (cur && !cur.stale ? { ...cur, stale: true, shown: false, revealed: 0, hintLevel: 0 } : cur));
   }, []);
 
   const endStaleSession = useCallback(() => {
@@ -564,20 +632,30 @@ export default function App() {
   // ═══ editor save ═══
   const saveCard = async (front: string, back: string, tags: string) => {
     const deckId = decks[0]?.id ?? 1;
-    if (editor?.card) {
-      await updateCard(editor.card.id, editor.card.deck_id, front, back, tags);
-      patchCard(editor.card.id, { front, back, tags, updated_at: new Date().toISOString() });
-      toast("Card updated", "success");
-    } else {
-      await createCard(deckId, front, back, tags);
-      toast("Card created", "success");
-      await refresh();
+    try {
+      if (editor?.card) {
+        await updateCard(editor.card.id, editor.card.deck_id, front, back, tags);
+        patchCard(editor.card.id, { front, back, tags, updated_at: new Date().toISOString() });
+        toast("Card updated", "success");
+      } else {
+        await createCard(deckId, front, back, tags);
+        toast("Card created", "success");
+        await refresh();
+      }
+    } catch (e) {
+      toast(`Could not save card: ${String(e).slice(0, 80)}`, "error");
+      throw e;
     }
     if (view === "review" && !editor?.card) startReview({ kind: "all" });
   };
 
   const onDeleteCard = async (card: CardWithState) => {
-    await deleteCard(card.id);
+    try {
+      await deleteCard(card.id);
+    } catch (e) {
+      toast(`Could not delete card: ${String(e).slice(0, 80)}`, "error");
+      return;
+    }
     setCards((cs) => cs.filter((c) => c.id !== card.id));
     setReview((r) => (r ? { ...r, queue: r.queue.filter((c) => c.id !== card.id) } : r));
     toast("Card deleted", "warn");
@@ -585,15 +663,19 @@ export default function App() {
 
   // ═══ imports/exports ═══
   const importCsv = async (file: File) => {
-    const text = await file.text();
-    const rows = parseCsv(text);
-    if (!rows.length) {
-      toast("No valid rows in CSV", "warn");
-      return;
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      if (!rows.length) {
+        toast("No valid rows in CSV", "warn");
+        return;
+      }
+      const created = await bulkCreateCards(rows.map(({ deck, ...rest }) => ({ deckName: deck, ...rest })));
+      await refresh();
+      toast(`Imported ${created} cards`, "success");
+    } catch (e) {
+      toast(`Import failed: ${String(e).slice(0, 80)}`, "error");
     }
-    const created = await bulkCreateCards(rows.map(({ deck, ...rest }) => ({ deckName: deck, ...rest })));
-    await refresh();
-    toast(`Imported ${created} cards`, "success");
   };
 
   const exportCsv = async () => {
@@ -610,25 +692,34 @@ export default function App() {
   };
 
   const importBookmarks = async () => {
-    const { readChromeBookmarksFile, toDrafts } = await import("./lib/bookmarks");
-    const json = await readChromeBookmarksFile();
-    const { parseChromeBookmarksJson } = await import("./lib/bookmarks");
-    const raw = parseChromeBookmarksJson(json);
-    const existingUrls = new Set(cards.map((c) => c.back).flatMap((b) => b.match(/https?:\/\/[^\s]+/g) ?? []));
-    const existingFronts = new Set(cards.map((c) => c.front.trim()));
-    const { willAdd } = toDrafts(raw, existingUrls, existingFronts);
-    if (!willAdd.length) {
-      toast("No new bookmarks to import", "info");
-      return;
+    try {
+      const { readChromeBookmarksFile, pickAndReadBookmarksViaDialog, parseChromeBookmarksJson, parseBookmarksHtml, toDrafts } = await import("./lib/bookmarks");
+      let rawText: string;
+      try {
+        rawText = await readChromeBookmarksFile();
+      } catch {
+        toast("Opening the bookmarks file picker…", "info");
+        rawText = await pickAndReadBookmarksViaDialog();
+      }
+      const raw = rawText.trim().startsWith("<") || rawText.trim().startsWith("<!") ? parseBookmarksHtml(rawText) : parseChromeBookmarksJson(rawText);
+      const existingUrls = new Set(cards.map((c) => c.back).flatMap((b) => b.match(/https?:\/\/[^\s]+/g) ?? []));
+      const existingFronts = new Set(cards.map((c) => c.front.trim()));
+      const { willAdd } = toDrafts(raw, existingUrls, existingFronts);
+      if (!willAdd.length) {
+        toast("No new bookmarks to import", "info");
+        return;
+      }
+      let added = 0;
+      for (const d of willAdd.slice(0, 120)) {
+        const back = `**Link:** ${d.url}\n\n**Source:** ${d.folderPath || "bookmarks"}`;
+        await createCard(decks[0]?.id ?? 1, d.title, back, d.tags || "bookmark");
+        added++;
+      }
+      await refresh();
+      toast(`Imported ${added} bookmarks`, "success");
+    } catch (e) {
+      toast(`Bookmark import failed: ${String(e).slice(0, 120)}`, "error");
     }
-    let added = 0;
-    for (const d of willAdd.slice(0, 120)) {
-      const back = `**Link:** ${d.url}\n\n**Source:** ${d.folderPath || "bookmarks"}`;
-      await createCard(decks[0]?.id ?? 1, d.title, back, d.tags || "bookmark");
-      added++;
-    }
-    await refresh();
-    toast(`Imported ${added} bookmarks`, "success");
   };
 
   const importArticle = async (url: string) => {
@@ -638,7 +729,7 @@ export default function App() {
       const org = await organizeArticle(url);
       await createCard(decks[0]?.id ?? 1, org.front, org.back, org.tags);
       await refresh();
-      toast("Article card created", "success");
+      toast(org.mode === "zen" ? "Article card created with Zen" : "Article card created with local summarizer", "success");
     } catch (e) {
       toast(`Article import failed: ${String(e).slice(0, 80)}`, "error");
     }
@@ -669,7 +760,7 @@ export default function App() {
     { id: "toggle-inspector", ico: "panel", title: "Toggle inspector", sub: inspectorOpen ? "on" : "off", group: "Actions", tags: ["⌥⌘I"], run: () => setInspectorOpen((v) => !v) },
     { id: "theme", ico: "moon", title: "Cycle theme", sub: theme, group: "Actions", tags: ["⌘⇧T"], run: () => setTheme((t) => THEME_ORDER[(THEME_ORDER.indexOf(t) + 1) % THEME_ORDER.length]) },
     { id: "focus", ico: "focus", title: "Toggle focus mode", sub: "hide all chrome", group: "Actions", tags: ["⌘⇧F"], run: () => setFocusMode((f) => !f) },
-    { id: "demodata", ico: "sparkles", title: "Load demo content", sub: "decks + 90 days of review history", group: "Actions", run: async () => { await loadDemoData(); await refresh(); toast("Demo content loaded", "success"); } },
+    { id: "demodata", ico: "sparkles", title: "Load demo content", sub: "decks + 90 days of review history", group: "Actions", run: async () => { try { await loadDemoData(); await refresh(); toast("Demo content loaded", "success"); } catch (e) { toast(`Demo failed: ${String(e).slice(0, 80)}`, "error"); } } },
     { id: "import", ico: "upload", title: "Import CSV", group: "Actions", run: () => fileInputRef.current?.click() },
     { id: "export", ico: "download", title: "Export CSV", group: "Actions", run: () => void exportCsv() },
   ], [sidebarMode, inspectorOpen, theme, refresh, toast]);
@@ -715,7 +806,7 @@ export default function App() {
             <Icon name="search" size={12} /> <span>Search anything…</span> <kbd className="keycap" style={{ marginLeft: "auto" }}>⌘K</kbd>
           </button>
           <button className="btn-ghost" title="Quick capture (⌘⇧K)" onClick={() => setCaptureOpen(true)}><Icon name="capture" size={14} /></button>
-          <button className="btn-ghost" title="Help (⌘/)" onClick={() => setHelpOpen((v) => !v)}><Icon name="keyboard" size={14} /></button>
+          <button className="btn-ghost" title="Help (/)" onClick={() => setHelpOpen((v) => !v)}><Icon name="keyboard" size={14} /></button>
           <button className="btn-ghost" title="Settings (⌘,)" onClick={() => setView("settings")}><Icon name="settings" size={14} /></button>
         </div>
       </header>
@@ -727,7 +818,6 @@ export default function App() {
           lastReview={lastReview}
           rail={sidebarMode === "rail"}
           activeGroup={view === "browse" ? browseGroup : null}
-          activeSmart={null}
           onGroup={(g) => { setBrowseGroup(g); setView("browse"); }}
           onSmart={(id) => startReview({ kind: "smart", id: id as "due" | "new" | "learning" | "stuck" })}
           onStudy={(scope) => startReview(scope)}
@@ -747,6 +837,7 @@ export default function App() {
             <Dashboard
               cards={cards}
               reviews={reviews}
+              groups={groups}
               lastReview={lastReview}
               desiredRetention={desiredRetention}
               onStudyGroup={(g) => startReview({ kind: "group", group: g })}
@@ -757,7 +848,8 @@ export default function App() {
           )}
           {view === "review" && review && (
             <ReviewView
-              queue={review.queue.filter((c) => !review.buried.has(c.id))}
+              queue={review.queue}
+              buried={review.buried}
               idx={review.idx}
               shown={review.shown}
               revealed={review.revealed}
@@ -779,7 +871,7 @@ export default function App() {
               sessionStats={{ answered: review.answered, again: review.again, good: review.good }}
               airGestures={airGestures}
               stale={review.stale}
-              onResume={() => setReview((r) => (r ? { ...r, stale: false, shown: false, revealed: 0, hintLevel: 0 } : r))}
+              onResume={resume}
               onRestart={() => startReview(review.scope)}
             />
           )}
@@ -799,7 +891,7 @@ export default function App() {
               onExportCsv={exportCsv}
             />
           )}
-          {view === "analytics" && <AnalyticsView cards={cards} reviews={reviews} lastReview={lastReview} />}
+          {view === "analytics" && <AnalyticsView cards={cards} reviews={reviews} groups={groups} lastReview={lastReview} />}
           {view === "settings" && (
             <SettingsView
               theme={theme}
@@ -821,9 +913,9 @@ export default function App() {
               }}
               isTauri={isTauri}
               onToggleWidget={() => invoke("toggle_widget").catch(() => toast("Widget is desktop-only", "warn"))}
-              onLoadDemo={async () => { const r = await loadDemoData(); await refresh(); toast(`Demo content: ${r.cards} cards, ${r.reviews} reviews`, "success"); }}
-              onClearAll={async () => { await clearAllCards(); await refresh(); toast("All data cleared", "warn"); }}
-              onDedupe={async () => { const n = await deduplicateCards(); await refresh(); toast(n ? `Removed ${n} duplicates` : "No duplicates found", n ? "success" : "info"); }}
+              onLoadDemo={async () => { try { const r = await loadDemoData(); await refresh(); toast(`Demo content: ${r.cards} cards, ${r.reviews} reviews`, "success"); } catch (e) { toast(`Demo failed: ${String(e).slice(0, 80)}`, "error"); } }}
+              onClearAll={async () => { try { await clearAllCards(); localStorage.setItem("recall_seeded", "1"); await refresh(); toast("All data cleared", "warn"); } catch (e) { toast(`Clear failed: ${String(e).slice(0, 80)}`, "error"); } }}
+              onDedupe={async () => { try { const n = await deduplicateCards(); await refresh(); toast(n ? `Removed ${n} duplicates` : "No duplicates found", n ? "success" : "info"); } catch (e) { toast(`Dedupe failed: ${String(e).slice(0, 80)}`, "error"); } }}
               onImportBookmarks={importBookmarks}
               onImportArticle={importArticle}
               chromeAvailable={chromeAvailable}
@@ -866,7 +958,7 @@ export default function App() {
 function HelpPanel({ onClose }: { onClose: () => void }) {
   const groups = (["global", "review", "editor", "capture"] as const).map((s) => ({ scope: s, keys: scopeKeys(s) }));
   return (
-    <div className="help-panel" role="dialog">
+    <div className="help-panel" role="dialog" aria-modal="true" aria-label="Keyboard map">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <Icon name="keyboard" size={14} />
         <span style={{ fontWeight: 600, fontSize: 13 }}>Keyboard map</span>

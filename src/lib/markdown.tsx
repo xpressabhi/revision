@@ -37,7 +37,12 @@ export function clozeCount(source: string): number {
  */
 export function renderMarkdown(text: string, revealCloze: number | "all" | null = null) {
   const escapeHtml = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
   // 1) cloze extraction (operates on raw source; placeholders bubble through escape)
   const { tokens, text: afterCloze } = parseCloze(text);
@@ -123,7 +128,7 @@ export function renderMarkdown(text: string, revealCloze: number | "all" | null 
 
 function renderClozeBlock(t: ClozeToken, revealed: boolean): string {
   if (revealed) {
-    const hintAttr = t.hint ? ` title="hint: ${t.hint}"` : "";
+    const hintAttr = t.hint ? ` title="hint: ${escapeInner(t.hint)}"` : "";
     return `<span class="cloze revealed"${hintAttr}><mark>${escapeInner(t.text)}</mark></span>`;
   }
   const words = t.text.split(/\s+/).filter(Boolean);
@@ -135,7 +140,12 @@ function renderClozeBlock(t: ClozeToken, revealed: boolean): string {
 }
 
 function escapeInner(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function clampChip(w: string): number {

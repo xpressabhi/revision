@@ -90,18 +90,6 @@ export function ProgressRing({ pct, size = 46, stroke = 3, color, track, childre
   );
 }
 
-export function Segmented<T extends string>({ options, value, onChange }: { options: { id: T; label: string }[]; value: T; onChange: (id: T) => void }) {
-  return (
-    <div style={{ display: "flex", gap: 2, background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 9, padding: 2 }}>
-      {options.map((o) => (
-        <button key={o.id} className={`seg ${value === o.id ? "active" : ""}`} onClick={() => onChange(o.id)} style={{ height: 24, padding: "0 10px", borderRadius: 6, fontSize: 11, color: value === o.id ? "var(--accent)" : "var(--text-3)", fontWeight: value === o.id ? 600 : 400 }}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function fmtPct(r: number | null | undefined): string {
   if (r === null || r === undefined) return "-";
   return `${Math.round(r * 100)}%`;

@@ -4,11 +4,12 @@ set -euo pipefail
 # Build RevisionWidget appex and embed into Revision.app
 # For personal use — ad-hoc signing, no developer team required
 
-WIDGET_DIR="src-tauri/RevisionWidget"
-APP_BUNDLE="src-tauri/target/debug/bundle/macos/Revision.app"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+WIDGET_DIR="$REPO_ROOT/src-tauri/RevisionWidget"
+APP_BUNDLE="$REPO_ROOT/src-tauri/target/debug/bundle/macos/Revision.app"
 # Also check release bundle
 if [ ! -d "$APP_BUNDLE" ]; then
-  APP_BUNDLE="src-tauri/target/release/bundle/macos/Revision.app"
+  APP_BUNDLE="$REPO_ROOT/src-tauri/target/release/bundle/macos/Revision.app"
 fi
 
 if [ ! -d "$WIDGET_DIR" ]; then

@@ -25,7 +25,9 @@ targets:
     bundleId: com.revision.app.RevisionWidget
     info:
       path: RevisionWidget/Info.plist
-      properties: {}
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: RevisionWidget/RevisionWidget.entitlements
     sources:

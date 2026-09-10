@@ -58,7 +58,14 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-export async function browserInitDb() {
+let initPromise: Promise<void> | null = null;
+
+export function browserInitDb(): Promise<void> {
+  if (!initPromise) initPromise = doBrowserInitDb();
+  return initPromise;
+}
+
+async function doBrowserInitDb() {
   let decks = load<Deck[]>(LS_DECKS, []);
   let cards = load<CardWithState[]>(LS_CARDS, []); // we store CardWithState-like but separate
   let states = load<CardState[]>(LS_STATES, []);
@@ -286,6 +293,17 @@ export async function browserLogReviewAt(cardId: number, grade: number, when: Da
 export async function browserGetReviews(): Promise<ReviewRow[]> {
   await browserInitDb();
   return load<ReviewRow[]>(LS_REVIEWS, []);
+}
+
+export async function browserDeleteLastReview(cardId: number) {
+  const reviews = load<ReviewRow[]>(LS_REVIEWS, []);
+  for (let i = reviews.length - 1; i >= 0; i--) {
+    if (reviews[i].card_id === cardId) {
+      reviews.splice(i, 1);
+      save(LS_REVIEWS, reviews);
+      return;
+    }
+  }
 }
 
 export async function browserBulkCreateCards(rows: { deckName: string; front: string; back: string; tags: string }[]): Promise<number> {

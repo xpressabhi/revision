@@ -1,9 +1,18 @@
 // Article fetch + Zen organize (free OpenCode Zen models, fallback heuristic)
 // Local-first: tries opencode zen local (http://localhost:4096), then cloud free, then heuristic
 
-export type Organized = { front: string; back: string; tags: string };
+export type Organized = { front: string; back: string; tags: string; mode: "zen" | "heuristic" };
 
 let cachedFreeModels: string[] | null = null;
+
+/** Cloud extraction (Zen free models, CORS proxies, Firecrawl) is opt-in in Settings. */
+export function cloudExtractionAllowed(): boolean {
+  try {
+    return localStorage.getItem("revision_cloud_ok") === "1";
+  } catch {
+    return false;
+  }
+}
 
 export async function fetchFreeModels(): Promise<string[]> {
   if (cachedFreeModels) return cachedFreeModels;
@@ -64,46 +73,47 @@ export async function fetchArticle(url: string): Promise<{ title: string; text: 
   try {
     html = await tryFetch(u);
   } catch (e) {
-    // CORS fallbacks: try allorigins (json + raw), corsproxy, and firecrawl if key available
-    const fallbacks: (() => Promise<string>)[] = [
-      async () => {
-        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
-        const r = await fetch(proxy);
-        if (!r.ok) throw new Error("allorigins/get failed");
-        const j: any = await r.json();
-        if (!j.contents) throw new Error("allorigins empty");
-        return j.contents as string;
-      },
-      async () => {
-        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
-        const r = await fetch(proxy);
-        if (!r.ok) throw new Error("allorigins/raw failed");
-        return r.text();
-      },
-      async () => {
-        const proxy = `https://corsproxy.io/?${encodeURIComponent(u)}`;
-        const r = await fetch(proxy);
-        if (!r.ok) throw new Error("corsproxy failed");
-        const t = await r.text();
-        if (!t || t.length < 500) throw new Error("corsproxy empty");
-        return t;
-      },
-      async () => {
-        // Firecrawl if key in localStorage (best for Medium paywall + JS)
-        const key = (() => {
-          try { return localStorage.getItem("revision_firecrawl_key") || ""; } catch { return ""; }
-        })();
-        if (!key) throw new Error("no firecrawl key");
-        const r = await fetch("https://api.firecrawl.dev/v1/scrape", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-          body: JSON.stringify({ url: u, onlyMainContent: true, waitFor: 5000 }),
-        });
-        if (!r.ok) throw new Error("firecrawl failed");
-        const j: any = await r.json();
-        return (j.data?.markdown || j.data?.html || j.markdown || "") as string;
-      },
-    ];
+    // CORS fallbacks route the URL through third parties — only when the user opted in.
+    const fallbacks: (() => Promise<string>)[] = cloudExtractionAllowed()
+      ? [
+          async () => {
+            const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
+            const r = await fetch(proxy);
+            if (!r.ok) throw new Error("allorigins/get failed");
+            const j: any = await r.json();
+            if (!j.contents) throw new Error("allorigins empty");
+            return j.contents as string;
+          },
+          async () => {
+            const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
+            const r = await fetch(proxy);
+            if (!r.ok) throw new Error("allorigins/raw failed");
+            return r.text();
+          },
+          async () => {
+            const proxy = `https://corsproxy.io/?${encodeURIComponent(u)}`;
+            const r = await fetch(proxy);
+            if (!r.ok) throw new Error("corsproxy failed");
+            const t = await r.text();
+            if (!t || t.length < 500) throw new Error("corsproxy empty");
+            return t;
+          },
+          async () => {
+            const key = (() => {
+              try { return localStorage.getItem("revision_firecrawl_key") || ""; } catch { return ""; }
+            })();
+            if (!key) throw new Error("no firecrawl key");
+            const r = await fetch("https://api.firecrawl.dev/v1/scrape", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+              body: JSON.stringify({ url: u, onlyMainContent: true, waitFor: 5000 }),
+            });
+            if (!r.ok) throw new Error("firecrawl failed");
+            const j: any = await r.json();
+            return (j.data?.markdown || j.data?.html || j.markdown || "") as string;
+          },
+        ]
+      : [];
     let lastErr = e;
     for (const fn of fallbacks) {
       try {
@@ -114,11 +124,9 @@ export async function fetchArticle(url: string): Promise<{ title: string; text: 
       }
     }
     if (!html) {
-      // Final fallback: return minimal stub for Zen to still try (e.g., Medium behind Cloudflare without Firecrawl key)
-      // Use URL as title and placeholder text so organizeArticle can still create a card via heuristic/Zen
       const fallbackTitle = u.split("/").pop()?.replace(/-/g, " ").replace(/\?.*/, "") || u;
       console.warn("All article fetches failed, using fallback stub for", u, lastErr);
-      return { title: fallbackTitle.slice(0, 120) || u, text: `Article at ${u}: fetch blocked (Cloudflare). Use Firecrawl API key in Settings for full extract.`, markdown: `# ${fallbackTitle}\n\nArticle at ${u}` };
+      return { title: fallbackTitle.slice(0, 120) || u, text: `Article at ${u}: fetch blocked. Enable cloud extraction in Settings or paste the text manually.`, markdown: `# ${fallbackTitle}\n\nArticle at ${u}` };
     }
   }
 
@@ -164,10 +172,11 @@ function heuristicOrganize(url: string, title: string, text: string): Organized 
 
   const front = title.length > 80 ? `${title.slice(0, 77)}...: What is the key takeaway?` : `${title}: What is the key takeaway?`;
   const back = `**Link:** ${url}\n\n**Summary:** ${firstSentences || text.slice(0, 300)}\n\n**Takeaways:**\n- \n- \n\n**Tags:** ${tags.join(", ")}`;
-  return { front, back, tags: tags.join(", ") };
+  return { front, back, tags: tags.join(", "), mode: "heuristic" };
 }
 
 async function callZen(prompt: string): Promise<string | null> {
+  if (!cloudExtractionAllowed()) return null;
   // 1) Primary: opencode.ai/zen/v1 — try all free models in order, selected first
   try {
     const freeList = await fetchFreeModels();
@@ -287,7 +296,7 @@ Output JSON example: {"front":"RAG — when to use hybrid search?","back":"**Lin
           if (!tags.includes("article")) tags = `article, ${tags}`;
           // Normalize tags to our pillar format
           tags = tags.replace(/\s+/g, " ").replace(/,\s*/g, ", ").trim();
-          return { front: String(j.front).slice(0, 120), back: back.slice(0, 800), tags: tags.slice(0, 150) };
+          return { front: String(j.front).slice(0, 120), back: back.slice(0, 800), tags: tags.slice(0, 150), mode: "zen" };
         }
       } catch {}
     }
@@ -298,12 +307,10 @@ Output JSON example: {"front":"RAG — when to use hybrid search?","back":"**Lin
   // Fallback heuristic when Zen unavailable or parse failed — still return heuristic so card can be created
   // If raw was null (all free models failed), the heuristic will be used but UI can show a warning toast
   // We attach a console warning for debugging; handleOrganizeArticle will show a toast about switching model
-  if (!raw) {
+  if (!raw && cloudExtractionAllowed()) {
     const freeModels = await fetchFreeModels().catch(() => []);
     if (freeModels.length > 0) {
-      console.warn(`All free Zen models failed (tried ${freeModels.slice(0, 3).join(", ")}...). Using heuristic. Please switch model in Settings → Zen Model.`);
-      // Optionally, we could throw to let UI show error, but we return heuristic so card is still created
-      // The UI will detect heuristic (back contains "fetch blocked" or front is generic) and show a toast
+      console.warn(`All free Zen models failed (tried ${freeModels.slice(0, 3).join(", ")}...). Using heuristic.`);
     }
   }
   return heuristicOrganize(url, title, text);

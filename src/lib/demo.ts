@@ -57,20 +57,26 @@ export async function loadDemoData(): Promise<{ cards: number; reviews: number }
   const defaultDeck = decks[0];
   if (!defaultDeck) throw new Error("No deck available");
 
+  const existing = await getAllCardsWithState();
+  const existingFronts = new Set(existing.map((c) => c.front.trim()));
+  const toCreate = DEMO_CARDS.filter((c) => !existingFronts.has(c.front.trim()));
+
   const now = new Date();
   const rnd = mulberry32(0x52ec_52);
   let cards = 0;
   let reviews = 0;
+  const createdIds = new Set<number>();
 
-  for (let i = 0; i < DEMO_CARDS.length; i++) {
-    const card = DEMO_CARDS[i];
-    await createCard(defaultDeck.id, card.front, card.back, card.tags);
+  for (const card of toCreate) {
+    const id = await createCard(defaultDeck.id, card.front, card.back, card.tags);
+    createdIds.add(id);
     cards++;
   }
+  if (cards === 0) return { cards: 0, reviews: 0 };
 
-  // Synthetic history: pull each card through 7–12 reviews over the past ~110 days.
+  // Synthetic history: pull each newly created card through 7–12 reviews over the past ~110 days.
   const all = await getAllCardsWithState();
-  const seeded = all.filter((c) => c.tags.includes("spanish") || c.tags.includes("bio") || c.tags.includes("dsa") || c.tags.includes("sd"));
+  const seeded = all.filter((c) => createdIds.has(c.id));
   for (const card of seeded) {
     const rounds = 4 + Math.floor(rnd() * 6); // 4–9 reviews per card
     const startOffset = 30 + Math.floor(rnd() * 70); // days ago

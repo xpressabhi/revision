@@ -10,7 +10,7 @@ export type ToastMsg = {
 
 export function Toasts({ toasts, onDone }: { toasts: ToastMsg[]; onDone: (id: number) => void }) {
   return (
-    <div className="toasts">
+    <div className="toasts" role="status" aria-live="polite">
       {toasts.map((t) => (
         <Toast key={t.id} t={t} onDone={onDone} />
       ))}

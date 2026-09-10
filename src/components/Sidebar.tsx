@@ -10,7 +10,6 @@ type Props = {
   lastReview: Map<number, string>;
   rail: boolean;
   activeGroup: string | null;
-  activeSmart: string | null;
   onGroup: (full: string | null) => void;
   onSmart: (id: string) => void;
   onStudy: (scope: StudyScope) => void;
@@ -20,7 +19,21 @@ type Props = {
   reviewActive: boolean;
 };
 
-export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSmart, onGroup, onSmart, onStudy, onNewCard, onView, toggleFocus, reviewActive }: Props) {
+function itemProps(fn: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onClick: fn,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        fn();
+      }
+    },
+  };
+}
+
+export function Sidebar({ groups, cards, lastReview, rail, activeGroup, onGroup, onSmart, onStudy, onNewCard, onView, toggleFocus, reviewActive }: Props) {
   const [openRoots, setOpenRoots] = useState<Set<string>>(new Set());
 
   const roots = useMemo(() => groups.filter((g) => !g.child), [groups]);
@@ -45,7 +58,7 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
         {!dim && (
           <div className="sb-section">
             <div className="sb-label">Study</div>
-            <div className={`sb-item ${reviewActive ? "active" : ""}`} onClick={() => onStudy({ kind: "all" })}>
+            <div className={`sb-item ${reviewActive ? "active" : ""}`} {...itemProps(() => onStudy({ kind: "all" }))}>
               <span className="sb-ico"><Icon name="bolt" /></span>
               <span>Start Review</span>
               {smart[0].count > 0 && <span className="sb-count">{smart[0].count}</span>}
@@ -53,9 +66,9 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
             {smart.map((f) => (
               <div
                 key={f.id}
-                className={`sb-item ${activeSmart === f.id ? "active" : ""}`}
-                onClick={() => onSmart(f.id)}
+                className="sb-item"
                 title={`${f.label}: ${f.count} cards`}
+                {...itemProps(() => onSmart(f.id))}
               >
                 <span className="sb-ico"><Icon name={f.ico} /></span>
                 <span>{f.label}</span>
@@ -76,11 +89,11 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
                 <div key={root.full}>
                   <div
                     className={`sb-item has-children ${open ? "open" : ""} ${active ? "active" : ""}`}
-                    onClick={() => {
+                    title={`${root.full}: ${root.total} cards, ${root.due} due`}
+                    {...itemProps(() => {
                       if (kids.length) setOpenRoots((s) => { const n = new Set(s); if (n.has(root.root)) n.delete(root.root); else n.add(root.root); return n; });
                       onGroup(root.full);
-                    }}
-                    title={`${root.full}: ${root.total} cards, ${root.due} due`}
+                    })}
                   >
                     {kids.length > 0 && <span className="sb-caret"><Icon name="chevron" size={10} /></span>}
                     <span className="sb-ico"><Icon name="book" /></span>
@@ -89,7 +102,7 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
                   </div>
                   {open &&
                     kids.map((k) => (
-                      <div key={k.full} className={`sb-item sb-tree ${activeGroup === k.full ? "active" : ""}`} onClick={() => onGroup(k.full)} title={`${k.full}: ${k.total} cards, ${k.due} due`}>
+                      <div key={k.full} className={`sb-item sb-tree ${activeGroup === k.full ? "active" : ""}`} title={`${k.full}: ${k.total} cards, ${k.due} due`} {...itemProps(() => onGroup(k.full))}>
                         <span className="sb-ico"><Icon name="layers" size={12} /></span>
                         <span>{k.child}</span>
                         {k.due > 0 && <span className="sb-count">{k.due}</span>}
@@ -111,20 +124,20 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
         {!dim && (
           <div className="sb-section">
             <div className="sb-label">Overview</div>
-            <div className="sb-item" onClick={() => onView("dashboard")}><span className="sb-ico"><Icon name="graph" /></span><span>Dashboard</span></div>
-            <div className="sb-item" onClick={() => onView("analytics")}><span className="sb-ico"><Icon name="chart" /></span><span>Study Analytics</span></div>
+            <div className="sb-item" {...itemProps(() => onView("dashboard"))}><span className="sb-ico"><Icon name="graph" /></span><span>Dashboard</span></div>
+            <div className="sb-item" {...itemProps(() => onView("analytics"))}><span className="sb-ico"><Icon name="chart" /></span><span>Study Analytics</span></div>
           </div>
         )}
       </div>
 
       <div className="sb-foot">
         {!dim && (
-          <div className="sb-item" onClick={onNewCard}>
+          <div className="sb-item" {...itemProps(onNewCard)}>
             <span className="sb-ico"><Icon name="plus" /></span>
             <span>New card</span>
           </div>
         )}
-        <div className="sb-item" onClick={toggleFocus} title="Focus mode (⌘⇧F)">
+        <div className="sb-item" title="Focus mode (⌘⇧F)" {...itemProps(toggleFocus)}>
           <span className="sb-ico"><Icon name="focus" /></span>
           <span>Focus mode</span>
         </div>
@@ -133,7 +146,7 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, activeSm
   );
 }
 
-/** Minimal co-occurrence tag graph: nodes sized by card count, edges = shared cards. */
+/** Minimal co-occurrence tag graph: nodes sized by card count. */
 function TagGraph({ groups, onPick, onStudy }: { groups: TagNode[]; onPick: (full: string) => void; onStudy: () => void }) {
   const top = useMemo(() => groups.slice(0, 9), [groups]);
   const W = 176;
@@ -170,7 +183,21 @@ function TagGraph({ groups, onPick, onStudy }: { groups: TagNode[]; onPick: (ful
           )),
         )}
         {nodes.map((n) => (
-          <g key={n.full} className="tg-node" onClick={() => onPick(n.full)} style={{ cursor: "pointer" }}>
+          <g
+            key={n.full}
+            className="tg-node"
+            role="button"
+            tabIndex={0}
+            aria-label={`Browse ${n.full}, ${n.total} cards`}
+            onClick={() => onPick(n.full)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onPick(n.full);
+              }
+            }}
+            style={{ cursor: "pointer" }}
+          >
             <circle cx={n.x} cy={n.y} r={n.r} fill="var(--accent-dim)" stroke="var(--accent-glow)" strokeWidth={1} />
             <text className="tg-label" x={n.x} y={n.y + 2.5} textAnchor="middle">{n.root.slice(0, 10)}</text>
           </g>

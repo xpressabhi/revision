@@ -40,7 +40,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost tauri: https: http://localhost:4096; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "devCsp": null
     }
   },
   "bundle": {

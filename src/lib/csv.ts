@@ -1,22 +1,20 @@
 export function parseCsv(text: string): { deck: string; front: string; back: string; tags: string }[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return [];
-  // Detect header
-  const header = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
-  const hasHeader =
-    header.includes("front") || header.includes("back") || header.includes("deck");
+  const records = splitRecords(text);
+  if (records.length === 0) return [];
+  const header = splitCsvLine(records[0]).map((h) => h.trim().toLowerCase());
+  const hasHeader = header.includes("front") || header.includes("back") || header.includes("deck");
   const startIdx = hasHeader ? 1 : 0;
-  const deckIdx = hasHeader ? header.indexOf("deck") : 0;
-  const frontIdx = hasHeader ? header.indexOf("front") : hasHeader ? -1 : 0;
-  const backIdx = hasHeader ? header.indexOf("back") : hasHeader ? -1 : 1;
+  const deckIdx = hasHeader ? header.indexOf("deck") : -1;
+  const frontIdx = hasHeader ? header.indexOf("front") : -1;
+  const backIdx = hasHeader ? header.indexOf("back") : -1;
   const tagsIdx = hasHeader ? header.indexOf("tags") : 2;
 
   const actualFrontIdx = frontIdx === -1 ? (hasHeader ? 1 : 0) : frontIdx;
   const actualBackIdx = backIdx === -1 ? (hasHeader ? 2 : 1) : backIdx;
 
   const rows: { deck: string; front: string; back: string; tags: string }[] = [];
-  for (let i = startIdx; i < lines.length; i++) {
-    const cols = splitCsvLine(lines[i]);
+  for (let i = startIdx; i < records.length; i++) {
+    const cols = splitCsvLine(records[i]);
     if (cols.length < 2) continue;
     const deck = deckIdx >= 0 ? (cols[deckIdx] ?? "").trim() : "";
     const front = (cols[actualFrontIdx] ?? "").trim();
@@ -26,6 +24,30 @@ export function parseCsv(text: string): { deck: string; front: string; back: str
     rows.push({ deck, front, back, tags });
   }
   return rows;
+}
+
+/** Split on newlines that are outside quoted fields, so quoted values may span lines. */
+function splitRecords(text: string): string[] {
+  const records: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      cur += ch;
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes && (ch === "\n" || ch === "\r")) {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      records.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  records.push(cur);
+  return records.filter((r) => r.trim().length > 0);
 }
 
 function splitCsvLine(line: string): string[] {

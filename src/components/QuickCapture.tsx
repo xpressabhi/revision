@@ -24,19 +24,14 @@ export function QuickCapture({ open, groups, onClose, onSave }: Props) {
     }
   }, [open, groups]);
 
-  // Seed the back field with any selected text on open (simplified clipboard read)
-  useEffect(() => {
-    if (open && !back) {
-      try {
-        navigator.clipboard?.readText().then((t) => {
-          if (t && t.length > 3 && t.length < 4000 && !front) setBack(t.slice(0, 3000));
-        }).catch(() => {});
-      } catch {
-        /* clipboard unavailable */
-      }
+  const pasteClipboard = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (t) setBack(t.slice(0, 3000));
+    } catch {
+      /* clipboard unavailable */
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  };
 
   if (!open) return null;
 
@@ -54,7 +49,7 @@ export function QuickCapture({ open, groups, onClose, onSave }: Props) {
   return (
     <>
       <div className="cmd-backdrop" onClick={onClose} />
-      <div className="capture" role="dialog" aria-label="Quick capture">
+      <div className="capture" role="dialog" aria-modal="true" aria-label="Quick capture">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ color: "var(--accent)" }}><Icon name="capture" size={15} /></span>
           <span style={{ fontWeight: 600, fontSize: 13 }}>Quick capture</span>
@@ -84,6 +79,7 @@ export function QuickCapture({ open, groups, onClose, onSave }: Props) {
           <select className="btn btn-sm" value={group} onChange={(e) => setGroup(e.target.value)} style={{ height: 30 }}>
             {groups.length ? groups.map((g) => <option key={g} value={g}>{g}</option>) : <option value="">no decks</option>}
           </select>
+          <button className="btn btn-sm" onClick={() => void pasteClipboard()} title="Paste clipboard into the back field">Paste</button>
           <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={() => void save()} disabled={saving || !front.trim()}>
             <Icon name="check" size={12} /> Save <Keycap>⌘↵</Keycap>
           </button>

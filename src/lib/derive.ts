@@ -98,7 +98,7 @@ export function scopeCards(cards: CardWithState[], scope: StudyScope, lastReview
   }
   const now = Date.now();
   const learning = pool.filter((c) => c.state === "learning").sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
-  const due = pool.filter((c) => c.state !== "new" && new Date(c.due_at).getTime() <= now).sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
+  const due = pool.filter((c) => c.state === "review" && new Date(c.due_at).getTime() <= now).sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
   const fresh = pool.filter((c) => c.state === "new").sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).slice(0, 20);
   return [...learning, ...due, ...fresh];
 }
@@ -114,13 +114,22 @@ export function lastReviewMap(reviews: ReviewRow[]): Map<number, string> {
 
 /** GitHub-style 7×53 grid; level 0..4. */
 export type HeatCell = { date: Date; count: number; level: 0 | 1 | 2 | 3 | 4 };
+
+/** Local-calendar `YYYY-MM-DD` key (review days should follow the user's clock, not UTC). */
+export function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function heatGrid(reviews: ReviewRow[], weeks = 53): { cells: HeatCell[]; counts: Map<string, number> } {
   const counts = new Map<string, number>();
   for (const r of reviews) {
     const d = new Date(r.created_at);
     if (d.getTime() < Date.now() - weeks * 7 * 86_400_000) continue;
     if (d.getTime() > Date.now()) continue;
-    const key = d.toISOString().slice(0, 10);
+    const key = localDateKey(d);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const end = new Date();
@@ -129,8 +138,7 @@ export function heatGrid(reviews: ReviewRow[], weeks = 53): { cells: HeatCell[];
   const cells: HeatCell[] = [];
   for (let i = 0; i < weeks * 7; i++) {
     const date = new Date(start.getTime() + i * 86_400_000);
-    const key = date.toISOString().slice(0, 10);
-    const count = counts.get(key) ?? 0;
+    const count = counts.get(localDateKey(date)) ?? 0;
     const level: HeatCell["level"] = count === 0 ? 0 : count < 5 ? 1 : count < 13 ? 2 : count < 25 ? 3 : 4;
     cells.push({ date, count, level });
   }
@@ -138,12 +146,12 @@ export function heatGrid(reviews: ReviewRow[], weeks = 53): { cells: HeatCell[];
 }
 
 export function streakLength(reviews: ReviewRow[]): number {
-  const days = new Set(reviews.map((r) => new Date(r.created_at).toISOString().slice(0, 10)));
+  const days = new Set(reviews.map((r) => localDateKey(new Date(r.created_at))));
   let streak = 0;
   const cursor = new Date();
   cursor.setHours(0, 0, 0, 0);
-  if (!days.has(cursor.toISOString().slice(0, 10))) cursor.setDate(cursor.getDate() - 1);
-  while (days.has(cursor.toISOString().slice(0, 10))) {
+  if (!days.has(localDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  while (days.has(localDateKey(cursor))) {
     streak++;
     cursor.setDate(cursor.getDate() - 1);
   }
@@ -171,7 +179,7 @@ export function retentionForecast(cards: CardWithState[], lastReview: Map<number
 export function queueBuckets(cards: CardWithState[]): { label: string; count: number; days: number }[] {
   const now = Date.now();
   const bounds = [0, 1, 3, 7, 14, 30, 90, Infinity];
-  const labels = ["Today", "1d", "3d", "7d", "14d", "30d", "90d", "90d+"];
+  const labels = ["Today", "≤3d", "≤7d", "≤14d", "≤30d", "≤90d", "90d+"];
   const active = cards.filter((c) => c.state !== "new" && !c.tags.includes("suspended"));
   return bounds.slice(0, -1).map((b, i) => {
     const count = active.filter((c) => {
@@ -189,14 +197,14 @@ export function reviewsPerDay(reviews: ReviewRow[], days: number): { label: stri
   for (const r of reviews) {
     const d = new Date(r.created_at);
     if (d.getTime() < Date.now() - (days - 1) * 86_400_000) continue;
-    const key = d.toISOString().slice(0, 10);
+    const key = localDateKey(d);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - i);
-    const key = date.toISOString().slice(0, 10);
+    const key = localDateKey(date);
     out.push({ label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: counts.get(key) ?? 0, date });
   }
   return out;

@@ -203,16 +203,12 @@ export async function pickAndReadBookmarksViaDialog(): Promise<string> {
     // We don't check exists here (would be blocked); just propose the most likely macOS path
     defaultPath = await join(home, "Library/Application Support/Google/Chrome/Default");
   } catch {}
-  // Filters: HTML export + JSON + raw Bookmarks (no ext → needs All files)
+  // No extension filters: the raw Chrome Bookmarks file has no extension on macOS.
   const selected = await open({
     multiple: false,
     directory: false,
     defaultPath,
     title: "Select Chrome Bookmarks file (Default/Bookmarks, no extension) or exported Bookmarks.html",
-    filters: [
-      { name: "All files", extensions: ["*"] },
-      { name: "Bookmarks HTML/JSON", extensions: ["html", "htm", "json"] },
-    ],
   });
   if (!selected || Array.isArray(selected)) {
     if (Array.isArray(selected) && selected[0]) {

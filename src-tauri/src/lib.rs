@@ -3,11 +3,6 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[derive(serde::Deserialize)]
 struct DeckStat {
     name: String,
@@ -75,15 +70,6 @@ fn toggle_widget(app: AppHandle) -> Result<(), String> {
             w.show().map_err(|e| e.to_string())?;
             w.set_focus().map_err(|e| e.to_string())?;
         }
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn show_widget(app: AppHandle) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("widget") {
-        w.show().map_err(|e| e.to_string())?;
-        w.set_focus().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -177,7 +163,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![greet, update_tray, toggle_widget, show_widget, hide_widget, debug_log])
+        .invoke_handler(tauri::generate_handler![update_tray, toggle_widget, hide_widget, debug_log])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

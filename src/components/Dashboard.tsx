@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import type { CardWithState, ReviewRow } from "../lib/types";
-import { buildTagTree, heatGrid, streakLength, retentionForecast, queueBuckets, type TagNode } from "../lib/derive";
-import { Icon, Keycap, ProgressRing } from "./ui";
+import { heatGrid, streakLength, retentionForecast, queueBuckets, type TagNode } from "../lib/derive";
+import { Icon, ProgressRing } from "./ui";
 
 type Props = {
   cards: CardWithState[];
   reviews: ReviewRow[];
+  groups: TagNode[];
   lastReview: Map<number, string>;
   desiredRetention: number;
   onStudyGroup: (group: string) => void;
@@ -14,10 +15,9 @@ type Props = {
   onNewCard: () => void;
 };
 
-export function Dashboard({ cards, reviews, lastReview, desiredRetention, onStudyGroup, onStudyAll, onBrowseGroup, onNewCard }: Props) {
+export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention, onStudyGroup, onStudyAll, onBrowseGroup, onNewCard }: Props) {
   const streak = useMemo(() => streakLength(reviews), [reviews]);
   const grid = useMemo(() => heatGrid(reviews), [reviews]);
-  const groups = useMemo(() => buildTagTree(cards, lastReview), [cards, lastReview]);
   const forecast = useMemo(() => retentionForecast(cards, lastReview), [cards, lastReview]);
   const buckets = useMemo(() => queueBuckets(cards), [cards]);
   const dueNow = useMemo(() => cards.filter((c) => c.state !== "new" && new Date(c.due_at).getTime() <= Date.now() && !c.tags.includes("suspended")).length, [cards]);
@@ -97,7 +97,7 @@ export function Dashboard({ cards, reviews, lastReview, desiredRetention, onStud
 
 function HeatmapGrid({ cells }: { cells: ReturnType<typeof heatGrid>["cells"] }) {
   const startDay = cells[0]?.date.getDay() ?? 0;
-  const offset = (6 - startDay) % 7; // pad front so columns = weeks ending Saturday
+  const offset = startDay;
   const n = cells.length + offset;
   const [hover, setHover] = useState<number | null>(null);
   return (
@@ -209,17 +209,6 @@ function DeckCard({ group, index, onStudy, onBrowse }: { group: TagNode; index: 
           <Icon name="bolt" size={11} /> Study
         </button>
       </div>
-    </div>
-  );
-}
-
-export function ShortcutHint() {
-  return (
-    <div style={{ display: "flex", gap: 12, alignItems: "center", fontSize: 11, color: "var(--text-3)", padding: "0 2px" }}>
-      <span><Keycap>⌘K</Keycap> anything</span>
-      <span><Keycap>⌘3</Keycap> review</span>
-      <span><Keycap>Space</Keycap> reveal</span>
-      <span><Keycap>1-4</Keycap> grade</span>
     </div>
   );
 }

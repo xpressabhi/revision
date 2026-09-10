@@ -124,8 +124,3 @@ export function generateVariants(source: string, mode: "qa" | "cloze" | "cards",
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-
-/** Crude "is this prompt-shaped text" detection — nothing sent anywhere. */
-export function looksLikePrompt(text: string): boolean {
-  return /(https?:\/\/|^\s*(question|q:|prompt|define|explain))/im.test(text);
-}

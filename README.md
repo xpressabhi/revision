@@ -5,7 +5,7 @@
 
 Local-first desktop app for principal-level interview prep. **FSRS-5 spaced repetition** for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral** — a keyboard-first, glassmorphic macOS app with drag & air gestures.
 
-> Works fully offline. Single SQLite file `revision.db` (Tauri) or `localStorage` (browser preview). No cloud, no account.
+> Core features work fully offline: single SQLite file `revision.db` (Tauri) or `localStorage` (browser preview). No account, no telemetry. Two features are opt-in and use the network: article import can send the fetched text to opencode Zen free models, and Chrome bookmark import reads a local file you pick.
 
 ---
 

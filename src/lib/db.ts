@@ -1,4 +1,4 @@
-// @ts-nocheck
+import type Database from "@tauri-apps/plugin-sql";
 import type { CardState, CardWithState, Deck, DeckStats, ReviewRow } from "./types";
 import { DEFAULT_EASE, DEFAULT_STABILITY, DEFAULT_DIFFICULTY } from "./fsrs";
 import {
@@ -13,25 +13,26 @@ import {
   browserGetDueCards,
   browserGetDeckStats,
   browserUpdateCardState,
-  browserLogReview,
   browserLogReviewAt,
   browserGetReviews,
   browserBulkCreateCards,
+  browserClearAllCards,
+  browserDeduplicateCards,
+  browserDeleteLastReview,
 } from "./db.browser";
 
-// Tauri detection
-function isTauri(): boolean {
+function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 }
 
-let dbInstance: any | null = null;
+const useBrowserStorage = !isTauriRuntime();
 
-async function getDb() {
+let dbInstance: Database | null = null;
+
+async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
-  // Lazy import so browser bundle doesn't fail if plugin missing
   const mod = await import("@tauri-apps/plugin-sql");
-  const Database = mod.default;
-  dbInstance = await Database.load("sqlite:revision.db");
+  dbInstance = await mod.default.load("sqlite:revision.db");
   return dbInstance;
 }
 
@@ -49,156 +50,132 @@ function deckNameToTag(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-async function migrateToSingleDeckTauri(db: any) {
-  // Ensure single "Revision" deck exists
+async function migrateToSingleDeckTauri(db: Database) {
   const now = new Date().toISOString();
-  let rev = await db.select<{ id: number; name: string }[]>("SELECT id FROM decks WHERE name = $1", ["Revision"]);
+  const rev = await db.select<{ id: number; name: string }[]>("SELECT id FROM decks WHERE name = $1", ["Revision"]);
   let revisionId: number;
   if (rev.length === 0) {
     const r = await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", ["Revision", now]);
-    revisionId = (r as unknown as { lastInsertId: number }).lastInsertId;
+    revisionId = r.lastInsertId ?? 0;
   } else {
     revisionId = rev[0].id;
   }
-  // If only one deck (Revision) and no other decks, no migration needed
   const allDecks = await db.select<{ id: number; name: string }[]>("SELECT id, name FROM decks");
   if (allDecks.length <= 1) return;
 
-  // For each old deck, migrate its cards to Revision and add tag for old deck
-  for (const deck of allDecks) {
-    if (deck.id === revisionId) continue;
-    const tag = deckNameToTag(deck.name);
-    // Update cards: set deck_id to revisionId and append tag if not already present
-    const cards = await db.select<{ id: number; tags: string }[]>("SELECT id, tags FROM cards WHERE deck_id = $1", [deck.id]);
-    for (const card of cards) {
-      const tags = card.tags || "";
-      const hasTag = tags.split(",").map((t) => t.trim().toLowerCase()).includes(tag);
-      const newTags = hasTag ? tags : tags ? `${tags}, ${tag}` : tag;
-      await db.execute("UPDATE cards SET deck_id = $1, tags = $2, updated_at = $3 WHERE id = $4", [revisionId, newTags, now, card.id]);
+  await db.execute("BEGIN");
+  try {
+    for (const deck of allDecks) {
+      if (deck.id === revisionId) continue;
+      const tag = deckNameToTag(deck.name);
+      const cards = await db.select<{ id: number; tags: string }[]>("SELECT id, tags FROM cards WHERE deck_id = $1", [deck.id]);
+      for (const card of cards) {
+        const tags = card.tags || "";
+        const hasTag = tags.split(",").map((t) => t.trim().toLowerCase()).includes(tag);
+        const newTags = hasTag ? tags : tags ? `${tags}, ${tag}` : tag;
+        await db.execute("UPDATE cards SET deck_id = $1, tags = $2, updated_at = $3 WHERE id = $4", [revisionId, newTags, now, card.id]);
+      }
+      await db.execute("DELETE FROM decks WHERE id = $1", [deck.id]);
     }
-    // Delete old deck (now empty, cards moved)
-    await db.execute("DELETE FROM decks WHERE id = $1", [deck.id]);
+    await db.execute("COMMIT");
+  } catch (e) {
+    await db.execute("ROLLBACK");
+    throw e;
   }
 }
 
-// Initialize schema
-export async function initDb() {
-  if (!isTauri()) {
-    return browserInitDb();
-  }
-  try {
-    const db = await getDb();
-    await db.execute("PRAGMA journal_mode=WAL;");
-    await db.execute("PRAGMA foreign_keys=ON;");
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS decks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        created_at TEXT NOT NULL
-      );
-    `);
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS cards (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
-        front TEXT NOT NULL,
-        back TEXT NOT NULL,
-        tags TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS card_state (
-        card_id INTEGER PRIMARY KEY REFERENCES cards(id) ON DELETE CASCADE,
-        due_at TEXT NOT NULL,
-        interval REAL NOT NULL DEFAULT 0,
-        ease REAL NOT NULL DEFAULT ${DEFAULT_EASE},
-        reps INTEGER NOT NULL DEFAULT 0,
-        state TEXT NOT NULL DEFAULT 'new',
-        stability REAL NOT NULL DEFAULT ${DEFAULT_STABILITY},
-        difficulty REAL NOT NULL DEFAULT ${DEFAULT_DIFFICULTY},
-        updated_at TEXT NOT NULL
-      );
-    `);
-    // FSRS migration for existing installs
-    const stateCols = await db.select<{ name: string }[]>("PRAGMA table_info(card_state)");
-    const hasStab = stateCols.some((c) => c.name === "stability");
-    const hasDiff = stateCols.some((c) => c.name === "difficulty");
-    if (!hasStab) await db.execute(`ALTER TABLE card_state ADD COLUMN stability REAL NOT NULL DEFAULT ${DEFAULT_STABILITY}`);
-    if (!hasDiff) await db.execute(`ALTER TABLE card_state ADD COLUMN difficulty REAL NOT NULL DEFAULT ${DEFAULT_DIFFICULTY}`);
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS reviews (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
-        grade INTEGER NOT NULL,
-        created_at TEXT NOT NULL
-      );
-    `);
-    await db.execute(`CREATE INDEX IF NOT EXISTS idx_cards_deck ON cards(deck_id);`);
-    await db.execute(`CREATE INDEX IF NOT EXISTS idx_state_due ON card_state(due_at);`);
-    await db.execute(`CREATE INDEX IF NOT EXISTS idx_state_state ON card_state(state);`);
+export async function initDb(): Promise<void> {
+  if (useBrowserStorage) return browserInitDb();
+  const db = await getDb();
+  await db.execute("PRAGMA journal_mode=WAL;");
+  await db.execute("PRAGMA foreign_keys=ON;");
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS decks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+      front TEXT NOT NULL,
+      back TEXT NOT NULL,
+      tags TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS card_state (
+      card_id INTEGER PRIMARY KEY REFERENCES cards(id) ON DELETE CASCADE,
+      due_at TEXT NOT NULL,
+      interval REAL NOT NULL DEFAULT 0,
+      ease REAL NOT NULL DEFAULT ${DEFAULT_EASE},
+      reps INTEGER NOT NULL DEFAULT 0,
+      state TEXT NOT NULL DEFAULT 'new',
+      stability REAL NOT NULL DEFAULT ${DEFAULT_STABILITY},
+      difficulty REAL NOT NULL DEFAULT ${DEFAULT_DIFFICULTY},
+      updated_at TEXT NOT NULL
+    );
+  `);
+  const stateCols = await db.select<{ name: string }[]>("PRAGMA table_info(card_state)");
+  const hasStab = stateCols.some((c) => c.name === "stability");
+  const hasDiff = stateCols.some((c) => c.name === "difficulty");
+  if (!hasStab) await db.execute(`ALTER TABLE card_state ADD COLUMN stability REAL NOT NULL DEFAULT ${DEFAULT_STABILITY}`);
+  if (!hasDiff) await db.execute(`ALTER TABLE card_state ADD COLUMN difficulty REAL NOT NULL DEFAULT ${DEFAULT_DIFFICULTY}`);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+      grade INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_cards_deck ON cards(deck_id);`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_state_due ON card_state(due_at);`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_state_state ON card_state(state);`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_reviews_card ON reviews(card_id);`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_reviews_created ON reviews(created_at);`);
 
-    const existing = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks");
-    if (existing[0].cnt === 0) {
-      const now = new Date().toISOString();
-      await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", ["Revision", now]);
-    } else {
-      // For existing installs with 6 decks, migrate to single deck + tags on first run after update
-      const deckCount = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks");
-      if (deckCount[0].cnt > 1) {
-        // Check if migration has already been done by seeing if any deck besides Revision exists
-        const nonRevision = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks WHERE name != $1", ["Revision"]);
-        if (nonRevision[0].cnt > 0) {
-          await migrateToSingleDeckTauri(db);
-        }
-      }
+  const existing = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks");
+  if (existing[0].cnt === 0) {
+    const now = new Date().toISOString();
+    await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", ["Revision", now]);
+  } else {
+    const nonRevision = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks WHERE name != $1", ["Revision"]);
+    if (nonRevision[0].cnt > 0) {
+      await migrateToSingleDeckTauri(db);
     }
-    await db.execute(
-      `INSERT OR IGNORE INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at)
-       SELECT id, updated_at, 0, ${DEFAULT_EASE}, 0, 'new', ${DEFAULT_STABILITY}, ${DEFAULT_DIFFICULTY}, updated_at FROM cards
-       WHERE id NOT IN (SELECT card_id FROM card_state)`
-    );
-    // FSRS migration: legacy SM-2 cards have stability 0 — backfill from their interval
-    // so predictions are sane instead of "due now forever".
-    await db.execute(
-      `UPDATE card_state SET stability = MAX(1.0, interval) WHERE state = 'review' AND stability <= 0`
-    );
-  } catch (e) {
-    console.warn("Tauri DB failed, falling back to browser storage", e);
-    return browserInitDb();
   }
+  await db.execute(
+    `INSERT OR IGNORE INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at)
+     SELECT id, updated_at, 0, ${DEFAULT_EASE}, 0, 'new', ${DEFAULT_STABILITY}, ${DEFAULT_DIFFICULTY}, updated_at FROM cards
+     WHERE id NOT IN (SELECT card_id FROM card_state)`
+  );
+  await db.execute(
+    `UPDATE card_state SET stability = MAX(1.0, interval) WHERE state = 'review' AND stability <= 0`
+  );
 }
 
 export async function getDecks(): Promise<Deck[]> {
-  if (!isTauri()) return browserGetDecks();
-  try {
-    const db = await getDb();
-    return db.select<Deck[]>("SELECT * FROM decks ORDER BY id ASC");
-  } catch {
-    return browserGetDecks();
-  }
+  if (useBrowserStorage) return browserGetDecks();
+  const db = await getDb();
+  return db.select<Deck[]>("SELECT * FROM decks ORDER BY id ASC");
 }
 
 export async function createDeck(name: string): Promise<void> {
-  if (!isTauri()) return browserCreateDeck(name);
-  try {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", [name.trim(), now]);
-  } catch {
-    return browserCreateDeck(name);
-  }
+  if (useBrowserStorage) return browserCreateDeck(name);
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", [name.trim(), now]);
 }
 
 export async function deleteDeck(id: number): Promise<void> {
-  if (!isTauri()) return browserDeleteDeck(id);
-  try {
-    const db = await getDb();
-    await db.execute("DELETE FROM decks WHERE id=$1", [id]);
-  } catch {
-    return browserDeleteDeck(id);
-  }
+  if (useBrowserStorage) return browserDeleteDeck(id);
+  const db = await getDb();
+  await db.execute("DELETE FROM decks WHERE id=$1", [id]);
 }
 
 export async function createCard(
@@ -207,23 +184,19 @@ export async function createCard(
   back: string,
   tags: string
 ): Promise<number> {
-  if (!isTauri()) return browserCreateCard(deckId, front, back, tags);
-  try {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    const res = await db.execute(
-      "INSERT INTO cards (deck_id, front, back, tags, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)",
-      [deckId, front.trim(), back.trim(), tags.trim(), now, now]
-    );
-    const cardId = (res as unknown as { lastInsertId: number }).lastInsertId;
-    await db.execute(
-      "INSERT INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-      [cardId, now, 0, DEFAULT_EASE, 0, "new", DEFAULT_STABILITY, DEFAULT_DIFFICULTY, now]
-    );
-    return cardId;
-  } catch {
-    return browserCreateCard(deckId, front, back, tags);
-  }
+  if (useBrowserStorage) return browserCreateCard(deckId, front, back, tags);
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const res = await db.execute(
+    "INSERT INTO cards (deck_id, front, back, tags, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)",
+    [deckId, front.trim(), back.trim(), tags.trim(), now, now]
+  );
+  const cardId = res.lastInsertId ?? 0;
+  await db.execute(
+    "INSERT INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+    [cardId, now, 0, DEFAULT_EASE, 0, "new", DEFAULT_STABILITY, DEFAULT_DIFFICULTY, now]
+  );
+  return cardId;
 }
 
 export async function updateCard(
@@ -233,27 +206,19 @@ export async function updateCard(
   back: string,
   tags: string
 ): Promise<void> {
-  if (!isTauri()) return browserUpdateCard(id, deckId, front, back, tags);
-  try {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    await db.execute(
-      "UPDATE cards SET deck_id=$1, front=$2, back=$3, tags=$4, updated_at=$5 WHERE id=$6",
-      [deckId, front.trim(), back.trim(), tags.trim(), now, id]
-    );
-  } catch {
-    return browserUpdateCard(id, deckId, front, back, tags);
-  }
+  if (useBrowserStorage) return browserUpdateCard(id, deckId, front, back, tags);
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.execute(
+    "UPDATE cards SET deck_id=$1, front=$2, back=$3, tags=$4, updated_at=$5 WHERE id=$6",
+    [deckId, front.trim(), back.trim(), tags.trim(), now, id]
+  );
 }
 
 export async function deleteCard(id: number): Promise<void> {
-  if (!isTauri()) return browserDeleteCard(id);
-  try {
-    const db = await getDb();
-    await db.execute("DELETE FROM cards WHERE id=$1", [id]);
-  } catch {
-    return browserDeleteCard(id);
-  }
+  if (useBrowserStorage) return browserDeleteCard(id);
+  const db = await getDb();
+  await db.execute("DELETE FROM cards WHERE id=$1", [id]);
 }
 
 export async function getAllCardsWithState(opts?: {
@@ -261,112 +226,96 @@ export async function getAllCardsWithState(opts?: {
   search?: string;
   state?: string | null;
 }): Promise<CardWithState[]> {
-  if (!isTauri()) return browserGetAllCardsWithState(opts);
-  try {
-    const db = await getDb();
-    let where: string[] = [];
-    let params: unknown[] = [];
-    let idx = 1;
-    if (opts?.deckId) {
-      where.push(`c.deck_id = $${idx++}`);
-      params.push(opts.deckId);
-    }
-    if (opts?.state) {
-      where.push(`cs.state = $${idx++}`);
-      params.push(opts.state);
-    }
-    if (opts?.search && opts.search.trim()) {
-      const term = `%${opts.search.trim().toLowerCase()}%`;
-      where.push(`(LOWER(c.front) LIKE $${idx} OR LOWER(c.back) LIKE $${idx} OR LOWER(c.tags) LIKE $${idx} OR LOWER(d.name) LIKE $${idx})`);
-      params.push(term);
-      idx++;
-    }
-    const whereCl = where.length ? `WHERE ${where.join(" AND ")}` : "";
-    const sql = `
-      SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
-      FROM cards c
-      JOIN decks d ON d.id = c.deck_id
-      JOIN card_state cs ON cs.card_id = c.id
-      ${whereCl}
-      ORDER BY cs.due_at ASC, c.updated_at DESC
-    `;
-    return db.select<CardWithState[]>(sql, params as never);
-  } catch {
-    return browserGetAllCardsWithState(opts);
+  if (useBrowserStorage) return browserGetAllCardsWithState(opts);
+  const db = await getDb();
+  const where: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+  if (opts?.deckId) {
+    where.push(`c.deck_id = $${idx++}`);
+    params.push(opts.deckId);
   }
+  if (opts?.state) {
+    where.push(`cs.state = $${idx++}`);
+    params.push(opts.state);
+  }
+  if (opts?.search && opts.search.trim()) {
+    const term = `%${opts.search.trim().toLowerCase()}%`;
+    where.push(`(LOWER(c.front) LIKE $${idx} OR LOWER(c.back) LIKE $${idx} OR LOWER(c.tags) LIKE $${idx} OR LOWER(d.name) LIKE $${idx})`);
+    params.push(term);
+    idx++;
+  }
+  const whereCl = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const sql = `
+    SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
+    FROM cards c
+    JOIN decks d ON d.id = c.deck_id
+    JOIN card_state cs ON cs.card_id = c.id
+    ${whereCl}
+    ORDER BY cs.due_at ASC, c.updated_at DESC
+  `;
+  return db.select<CardWithState[]>(sql, params);
 }
 
 export async function getDueCards(limitNew = 20): Promise<CardWithState[]> {
-  if (!isTauri()) return browserGetDueCards(limitNew);
-  try {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    const due = await db.select<CardWithState[]>(
-      `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
-       FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
-       WHERE cs.due_at <= $1 AND cs.state != 'new'
-       ORDER BY cs.due_at ASC LIMIT 200`,
-      [now]
-    );
-    const newCards = await db.select<CardWithState[]>(
-      `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
-       FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
-       WHERE cs.state='new'
-       ORDER BY c.created_at ASC LIMIT $1`,
-      [limitNew]
-    );
-    return [...due, ...newCards];
-  } catch {
-    return browserGetDueCards(limitNew);
-  }
+  if (useBrowserStorage) return browserGetDueCards(limitNew);
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const due = await db.select<CardWithState[]>(
+    `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
+     FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
+     WHERE cs.due_at <= $1 AND cs.state != 'new'
+     ORDER BY cs.due_at ASC LIMIT 200`,
+    [now]
+  );
+  const newCards = await db.select<CardWithState[]>(
+    `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
+     FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
+     WHERE cs.state='new'
+     ORDER BY c.created_at ASC LIMIT $1`,
+    [limitNew]
+  );
+  return [...due, ...newCards];
 }
 
 export async function getDeckStats(): Promise<DeckStats[]> {
-  if (!isTauri()) return browserGetDeckStats();
-  try {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    const rows = await db.select<
-      { id: number; name: string; total: number; due: number; newCount: number; learning: number; review: number }[]
-    >(
-      `SELECT d.id, d.name,
-         COUNT(c.id) as total,
-         SUM(CASE WHEN cs.state != 'new' AND cs.due_at <= $1 THEN 1 ELSE 0 END) as due,
-         SUM(CASE WHEN cs.state='new' THEN 1 ELSE 0 END) as newCount,
-         SUM(CASE WHEN cs.state='learning' THEN 1 ELSE 0 END) as learning,
-         SUM(CASE WHEN cs.state='review' THEN 1 ELSE 0 END) as review
-       FROM decks d
-       LEFT JOIN cards c ON c.deck_id=d.id
-       LEFT JOIN card_state cs ON cs.card_id=c.id
-       GROUP BY d.id, d.name
-       ORDER BY d.id`,
-      [now]
-    );
-    return rows.map((r) => ({
-      deck_id: r.id,
-      deck_name: r.name,
-      total: r.total ?? 0,
-      due: r.due ?? 0,
-      newCount: r.newCount ?? 0,
-      learning: r.learning ?? 0,
-      review: r.review ?? 0,
-    }));
-  } catch {
-    return browserGetDeckStats();
-  }
+  if (useBrowserStorage) return browserGetDeckStats();
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const rows = await db.select<
+    { id: number; name: string; total: number; due: number; newCount: number; learning: number; review: number }[]
+  >(
+    `SELECT d.id, d.name,
+       COUNT(c.id) as total,
+       SUM(CASE WHEN cs.state != 'new' AND cs.due_at <= $1 THEN 1 ELSE 0 END) as due,
+       SUM(CASE WHEN cs.state='new' THEN 1 ELSE 0 END) as newCount,
+       SUM(CASE WHEN cs.state='learning' THEN 1 ELSE 0 END) as learning,
+       SUM(CASE WHEN cs.state='review' THEN 1 ELSE 0 END) as review
+     FROM decks d
+     LEFT JOIN cards c ON c.deck_id=d.id
+     LEFT JOIN card_state cs ON cs.card_id=c.id
+     GROUP BY d.id, d.name
+     ORDER BY d.id`,
+    [now]
+  );
+  return rows.map((r) => ({
+    deck_id: r.id,
+    deck_name: r.name,
+    total: r.total ?? 0,
+    due: r.due ?? 0,
+    newCount: r.newCount ?? 0,
+    learning: r.learning ?? 0,
+    review: r.review ?? 0,
+  }));
 }
 
 export async function updateCardState(state: CardState): Promise<void> {
-  if (!isTauri()) return browserUpdateCardState(state);
-  try {
-    const db = await getDb();
-    await db.execute(
-      "UPDATE card_state SET due_at=$1, interval=$2, ease=$3, reps=$4, state=$5, stability=$6, difficulty=$7, updated_at=$8 WHERE card_id=$9",
-      [state.due_at, state.interval, state.ease, state.reps, state.state, state.stability, state.difficulty, state.updated_at, state.card_id]
-    );
-  } catch {
-    return browserUpdateCardState(state);
-  }
+  if (useBrowserStorage) return browserUpdateCardState(state);
+  const db = await getDb();
+  await db.execute(
+    "UPDATE card_state SET due_at=$1, interval=$2, ease=$3, reps=$4, state=$5, stability=$6, difficulty=$7, updated_at=$8 WHERE card_id=$9",
+    [state.due_at, state.interval, state.ease, state.reps, state.state, state.stability, state.difficulty, state.updated_at, state.card_id]
+  );
 }
 
 export async function logReview(cardId: number, grade: number): Promise<void> {
@@ -374,57 +323,24 @@ export async function logReview(cardId: number, grade: number): Promise<void> {
 }
 
 export async function logReviewAt(cardId: number, grade: number, when: Date): Promise<void> {
-  if (!isTauri()) return browserLogReviewAt(cardId, grade, when);
-  try {
-    const db = await getDb();
-    await db.execute("INSERT INTO reviews (card_id, grade, created_at) VALUES ($1,$2,$3)", [cardId, grade, when.toISOString()]);
-  } catch {
-    return browserLogReviewAt(cardId, grade, when);
-  }
+  if (useBrowserStorage) return browserLogReviewAt(cardId, grade, when);
+  const db = await getDb();
+  await db.execute("INSERT INTO reviews (card_id, grade, created_at) VALUES ($1,$2,$3)", [cardId, grade, when.toISOString()]);
+}
+
+export async function deleteLastReview(cardId: number): Promise<void> {
+  if (useBrowserStorage) return browserDeleteLastReview(cardId);
+  const db = await getDb();
+  await db.execute(
+    "DELETE FROM reviews WHERE id = (SELECT id FROM reviews WHERE card_id=$1 ORDER BY id DESC LIMIT 1)",
+    [cardId]
+  );
 }
 
 export async function getReviews(): Promise<ReviewRow[]> {
-  if (!isTauri()) return browserGetReviews();
-  try {
-    const db = await getDb();
-    return db.select<ReviewRow[]>("SELECT id, card_id, grade, created_at FROM reviews ORDER BY created_at ASC");
-  } catch {
-    return browserGetReviews();
-  }
-}
-
-export async function getCounts(): Promise<{ total: number; due: number; newCount: number }> {
-  if (!isTauri()) {
-    const stats = await browserGetDeckStats();
-    return {
-      total: stats.reduce((a, s) => a + s.total, 0),
-      due: stats.reduce((a, s) => a + s.due, 0),
-      newCount: stats.reduce((a, s) => a + s.newCount, 0),
-    };
-  }
-  try {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    const r = await db.select<{ total: number; due: number; newCount: number }[]>(
-      `SELECT COUNT(*) as total,
-         SUM(CASE WHEN cs.state!='new' AND cs.due_at <= $1 THEN 1 ELSE 0 END) as due,
-         SUM(CASE WHEN cs.state='new' THEN 1 ELSE 0 END) as newCount
-       FROM cards c JOIN card_state cs ON cs.card_id=c.id`,
-      [now]
-    );
-    return {
-      total: r[0]?.total ?? 0,
-      due: r[0]?.due ?? 0,
-      newCount: r[0]?.newCount ?? 0,
-    };
-  } catch {
-    const stats = await browserGetDeckStats();
-    return {
-      total: stats.reduce((a, s) => a + s.total, 0),
-      due: stats.reduce((a, s) => a + s.due, 0),
-      newCount: stats.reduce((a, s) => a + s.newCount, 0),
-    };
-  }
+  if (useBrowserStorage) return browserGetReviews();
+  const db = await getDb();
+  return db.select<ReviewRow[]>("SELECT id, card_id, grade, created_at FROM reviews ORDER BY created_at ASC");
 }
 
 export async function exportAllCards(): Promise<CardWithState[]> {
@@ -434,67 +350,60 @@ export async function exportAllCards(): Promise<CardWithState[]> {
 export async function bulkCreateCards(
   rows: { deckName: string; front: string; back: string; tags: string }[]
 ): Promise<number> {
-  if (!isTauri()) return browserBulkCreateCards(rows);
-  try {
-    const decks = await getDecks();
-    const deckMap = new Map(decks.map((d) => [d.name.toLowerCase(), d.id]));
-    const singleId = decks.length === 1 ? decks[0].id : null;
-    let created = 0;
-    for (const r of rows) {
-      let deckId = deckMap.get(r.deckName.toLowerCase());
-      let extraTag: string | null = null;
-      if (!deckId && singleId) {
-        deckId = singleId;
-        extraTag = deckNameToTag(r.deckName);
-      }
-      if (!deckId) continue;
-      if (!r.front.trim() || !r.back.trim()) continue;
-      let tags = r.tags || "";
-      if (extraTag) {
-        const has = tags.split(",").map((t) => t.trim().toLowerCase()).includes(extraTag);
-        if (!has) tags = tags ? `${tags}, ${extraTag}` : extraTag;
-      }
-      await createCard(deckId, r.front, r.back, tags);
-      created++;
+  if (useBrowserStorage) return browserBulkCreateCards(rows);
+  const decks = await getDecks();
+  const deckMap = new Map(decks.map((d) => [d.name.toLowerCase(), d.id]));
+  const singleId = decks.length === 1 ? decks[0].id : null;
+  let created = 0;
+  for (const r of rows) {
+    let deckId = deckMap.get(r.deckName.toLowerCase());
+    let extraTag: string | null = null;
+    if (!deckId && singleId) {
+      deckId = singleId;
+      extraTag = deckNameToTag(r.deckName);
     }
-    return created;
-  } catch {
-    return browserBulkCreateCards(rows);
+    if (!deckId) continue;
+    if (!r.front.trim() || !r.back.trim()) continue;
+    let tags = r.tags || "";
+    if (extraTag) {
+      const has = tags.split(",").map((t) => t.trim().toLowerCase()).includes(extraTag);
+      if (!has) tags = tags ? `${tags}, ${extraTag}` : extraTag;
+    }
+    await createCard(deckId, r.front, r.back, tags);
+    created++;
   }
+  return created;
 }
 
 export async function clearAllCards(): Promise<void> {
-  const { browserClearAllCards } = await import("./db.browser");
-  if (!isTauri()) return browserClearAllCards();
+  if (useBrowserStorage) return browserClearAllCards();
+  const db = await getDb();
+  await db.execute("BEGIN");
   try {
-    const db = await getDb();
     await db.execute("DELETE FROM reviews");
     await db.execute("DELETE FROM card_state");
     await db.execute("DELETE FROM cards");
     await db.execute("DELETE FROM sqlite_sequence WHERE name='cards' OR name='reviews'");
-  } catch {
-    return browserClearAllCards();
+    await db.execute("COMMIT");
+  } catch (e) {
+    await db.execute("ROLLBACK");
+    throw e;
   }
 }
 
 export async function deduplicateCards(): Promise<number> {
-  const { browserDeduplicateCards } = await import("./db.browser");
-  if (!isTauri()) return browserDeduplicateCards();
-  try {
-    const all = await getAllCardsWithState();
-    const seen = new Map<string, number>();
-    let removed = 0;
-    for (const c of all) {
-      const key = `${c.deck_id}::${c.front.trim()}`;
-      if (!seen.has(key)) {
-        seen.set(key, c.id);
-      } else {
-        await deleteCard(c.id);
-        removed++;
-      }
+  if (useBrowserStorage) return browserDeduplicateCards();
+  const all = await getAllCardsWithState();
+  const seen = new Map<string, number>();
+  let removed = 0;
+  for (const c of all) {
+    const key = `${c.deck_id}::${c.front.trim()}`;
+    if (!seen.has(key)) {
+      seen.set(key, c.id);
+    } else {
+      await deleteCard(c.id);
+      removed++;
     }
-    return removed;
-  } catch {
-    return browserDeduplicateCards();
   }
+  return removed;
 }

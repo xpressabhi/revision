@@ -10,6 +10,7 @@ export type Pomo = { seconds: number; running: boolean; mode: "focus" | "break" 
 
 type Props = {
   queue: CardWithState[];
+  buried: Set<number>;
   idx: number;
   shown: boolean;
   revealed: number;
@@ -37,19 +38,20 @@ type Props = {
 
 export function ReviewView(p: Props) {
   const card = p.queue[p.idx] ?? null;
-  const total = p.queue.length;
+  const active = useMemo(() => p.queue.filter((c) => !p.buried.has(c.id)), [p.queue, p.buried]);
+  const total = active.length;
   const done = p.sessionStats.answered;
   const [hoverZone, setHoverZone] = useState<Grade | null>(null);
 
   const segStats = useMemo(() => {
     const counts = { learning: 0, review: 0, new: 0 };
-    for (const c of p.queue) {
+    for (const c of active) {
       if (c.state === "learning") counts.learning++;
       else if (c.state === "new") counts.new++;
       else counts.review++;
     }
     return counts;
-  }, [p.queue]);
+  }, [active]);
 
   useEffect(() => {
     if (!p.shown) setHoverZone(null);
@@ -104,7 +106,7 @@ export function ReviewView(p: Props) {
       {/* session bar */}
       <div className="session-bar">
         <div className="session-meta">
-          <span style={{ color: "var(--text-1)" }}>{Math.min(p.idx + 1, total)} / {total}</span>
+          <span style={{ color: "var(--text-1)" }}>{Math.min(done + 1, total)} / {total}</span>
         </div>
         <div className="session-progress">
           {(["learning", "review", "new"] as const).map((s) => {
@@ -125,7 +127,18 @@ export function ReviewView(p: Props) {
       <div className="flip-wrap" {...drag.bind}>
         <GesturePad air={p.airGestures} shown={p.shown} onGrade={(g) => p.onGrade(g)} />
         {p.stale && (
-          <div className="stale-banner" onClick={p.onResume}>
+          <div
+            className="stale-banner"
+            role="button"
+            tabIndex={0}
+            onClick={p.onResume}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                p.onResume();
+              }
+            }}
+          >
             <div className="stale-title"><Icon name="clock" size={14} /> Stepped away?</div>
             <div className="stale-sub">The answer is hidden. Recall it fresh. Your queue and progress are untouched until you resume.</div>
             <div className="stale-actions">
@@ -249,7 +262,7 @@ const PAD_CELLS: { dir: DragDir; grade: number; label: string; cls: string; area
 
 function GesturePad({ air, shown, onGrade }: { air: boolean; shown: boolean; onGrade: (g: Grade) => void }) {
   return (
-    <div className="gesture-pad" role="img" aria-label="Gesture map. Swipe or drag the card in a direction to grade. Tap to flip">
+    <div className="gesture-pad" role="group" aria-label="Gesture map. Swipe or drag the card in a direction to grade. Tap to flip">
       <div className="gp-grid">
         <div className="gp-center">
           <span>{air ? "pinch" : "tap"}</span>

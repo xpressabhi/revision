@@ -34,6 +34,11 @@ export function BrowseView(p: Props) {
   }, [p.cards, p.groupFilter, p.stateFilter, q]);
 
   const states = ["", "new", "learning", "review"];
+  const groupOptions = useMemo(() => {
+    const roots = Array.from(new Set(p.cards.map((c) => firstTag(c)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    if (p.groupFilter && !roots.includes(p.groupFilter)) roots.push(p.groupFilter);
+    return roots;
+  }, [p.cards, p.groupFilter]);
 
   return (
     <div className="canvas-inner">
@@ -64,9 +69,12 @@ export function BrowseView(p: Props) {
             <option key={s} value={s}>{s === "" ? "All states" : s === "new" ? "New" : s === "learning" ? "Learning" : "Review"}</option>
           ))}
         </select>
-        <button className={`btn btn-sm ${p.groupFilter === null ? "" : "btn-ghost"}`} onClick={() => p.onGroupFilter(p.groupFilter ? null : "spanish")}>
-          group: {p.groupFilter ?? "all"}
-        </button>
+        <select className="btn btn-sm" style={{ height: 32 }} value={p.groupFilter ?? ""} onChange={(e) => p.onGroupFilter(e.target.value || null)}>
+          <option value="">All groups</option>
+          {groupOptions.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
         <span className="chip mono" style={{ marginLeft: "auto" }}>{rows.length} shown</span>
       </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CardWithState } from "../lib/types";
 import { MarkdownView } from "../lib/markdown";
 import { generateVariants, type GeneratedVariant } from "../lib/ai";
+import { matchesChord } from "../lib/hotkeys";
 import { Icon } from "./ui";
 
 type Props = {
@@ -28,6 +29,8 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
   const [difficulty, setDifficulty] = useState(3);
   const [variants, setVariants] = useState<GeneratedVariant[]>([]);
   const frontRef = useRef<HTMLTextAreaElement>(null);
+  const backRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     frontRef.current?.focus();
@@ -35,6 +38,7 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
 
   const clozeCount = useMemo(() => (front.match(/\{\{c\d+::/g) ?? []).length, [front]);
   const selectedTags = tags;
+  const activeRef = tab === "front" ? frontRef : backRef;
 
   const addTag = (t: string) => {
     const clean = t.trim().replace(/^#/, "");
@@ -46,10 +50,12 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
   const removeTag = (t: string) => setTags((s) => s.filter((x) => x !== t));
 
   const wrapSelection = (pre: string, post: string) => {
-    const el = frontRef.current;
+    const el = activeRef.current;
     if (!el) return;
     const { selectionStart: a, selectionEnd: b, value } = el;
-    setFront(value.slice(0, a) + pre + value.slice(a, b) + post + value.slice(b));
+    const next = value.slice(0, a) + pre + value.slice(a, b) + post + value.slice(b);
+    if (tab === "front") setFront(next);
+    else setBack(next);
     el.focus();
     window.setTimeout(() => {
       el.setSelectionRange(a + pre.length, b + pre.length);
@@ -88,15 +94,53 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape" && !aiOpen) {
+    if (e.key === "Escape") {
       e.preventDefault();
-      onClose();
+      e.stopPropagation();
+      if (aiOpen) setAiOpen(false);
+      else onClose();
+      return;
+    }
+    if (matchesChord(e.nativeEvent, "mod+enter")) {
+      e.preventDefault();
+      e.stopPropagation();
+      void save();
+      return;
+    }
+    if (matchesChord(e.nativeEvent, "ctrl+shift+m")) {
+      e.preventDefault();
+      e.stopPropagation();
+      insertMath(true);
+      return;
+    }
+    if (matchesChord(e.nativeEvent, "ctrl+m")) {
+      e.preventDefault();
+      e.stopPropagation();
+      insertMath(false);
+      return;
+    }
+    if (matchesChord(e.nativeEvent, "ctrl+shift+c")) {
+      e.preventDefault();
+      e.stopPropagation();
+      wrapCloze();
+      return;
+    }
+    if (matchesChord(e.nativeEvent, "ctrl+shift+d")) {
+      e.preventDefault();
+      e.stopPropagation();
+      setAiOpen((v) => !v);
+      return;
+    }
+    if (matchesChord(e.nativeEvent, "ctrl+f")) {
+      e.preventDefault();
+      e.stopPropagation();
+      previewRef.current?.focus();
     }
   };
 
   return (
     <div className="modal-backdrop" onKeyDown={onKeyDown} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={card ? "Edit card" : "New card"}>
         <div className="modal-head">
           <span className="mh-title">{card ? "Edit card" : "New card"}</span>
           <span className="chip mono" style={{ fontSize: 10 }}>#{deckId}</span>
@@ -130,7 +174,7 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
         <div className="modal-body">
           <div className="editor-pane">
             <textarea
-              ref={frontRef}
+              ref={tab === "front" ? frontRef : backRef}
               className="editor-source"
               value={tab === "front" ? front : back}
               onChange={(e) => (tab === "front" ? setFront(e.target.value) : setBack(e.target.value))}
@@ -162,7 +206,7 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
           </div>
 
           <div className="editor-pane">
-            <div className="editor-preview">
+            <div className="editor-preview" ref={previewRef} tabIndex={-1}>
               <div className="face-label" style={{ marginBottom: 8 }}>
                 <span>Live preview</span>
                 <span className="muted">{tab === "front" ? "cloze masked" : "answer"}</span>

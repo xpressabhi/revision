@@ -1,21 +1,21 @@
 import { useMemo } from "react";
 import type { CardWithState, ReviewRow } from "../lib/types";
-import { buildTagTree, gradeShare, reviewsPerDay, streakLength, recentReviews, retentionForecast, queueBuckets } from "../lib/derive";
+import { gradeShare, reviewsPerDay, streakLength, recentReviews, retentionForecast, queueBuckets, type TagNode } from "../lib/derive";
 import { Icon } from "./ui";
 
 type Props = {
   cards: CardWithState[];
   reviews: ReviewRow[];
+  groups: TagNode[];
   lastReview: Map<number, string>;
 };
 
 const GRADE_COLORS = ["var(--danger)", "var(--warning)", "var(--accent)", "var(--info)"];
 
-export function AnalyticsView({ cards, reviews, lastReview }: Props) {
+export function AnalyticsView({ cards, reviews, groups, lastReview }: Props) {
   const streak = useMemo(() => streakLength(reviews), [reviews]);
   const perDay = useMemo(() => reviewsPerDay(reviews, 14), [reviews]);
   const shares = useMemo(() => gradeShare(reviews), [reviews]);
-  const groups = useMemo(() => buildTagTree(cards, lastReview), [cards, lastReview]);
   const forecast = useMemo(() => retentionForecast(cards, lastReview, 90), [cards, lastReview]);
   const buckets = useMemo(() => queueBuckets(cards), [cards]);
   const recent = useMemo(() => recentReviews(reviews, 8), [reviews]);

@@ -136,13 +136,13 @@ export function CommandBar({ open, onClose, cards, groups, actions, onStudy, onO
   return (
     <>
       <div className="cmd-backdrop" onClick={onClose} />
-      <div className="cmd-bar" role="dialog" aria-label="Command bar">
+      <div className="cmd-bar" role="dialog" aria-modal="true" aria-label="Command bar">
         <div className="cmd-input">
           <span className="glyph"><Icon name="command" size={15} /></span>
           <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} placeholder="Search decks, cards, tags, actions…" />
           <Keycap>Esc</Keycap>
         </div>
-        <div className="cmd-list" ref={listRef}>
+        <div className="cmd-list" ref={listRef} role="listbox" aria-label="Commands and search results">
           {grouped.map((g) => (
             <div key={g.group}>
               <div className="cmd-group">{g.group}</div>
@@ -153,6 +153,8 @@ export function CommandBar({ open, onClose, cards, groups, actions, onStudy, onO
                     key={g.group + r.title + i}
                     className={`cmd-row ${idx === sel ? "sel" : ""}`}
                     data-idx={idx}
+                    role="option"
+                    aria-selected={idx === sel}
                     onMouseEnter={() => setSel(idx)}
                     onClick={() => runRow(idx)}
                   >

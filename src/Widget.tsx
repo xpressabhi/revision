@@ -1,18 +1,13 @@
 import { useEffect, useState } from "react";
-import { getDeckStats, getDueCards, initDb } from "./lib/db";
+import { getDeckStats, initDb } from "./lib/db";
 import type { DeckStats } from "./lib/types";
 import { invoke } from "@tauri-apps/api/core";
 
-const DECK_COLORS: Record<string, string> = {
-  "DSA / LeetCode": "#0ea5e9",
-  "System Design Concepts": "#8b5cf6",
-  "System Design Use Cases": "#f59e0b",
-  "AI Concepts": "#10b981",
-  "AI Use Cases": "#ec4899",
-  Behavioral: "#6366f1",
-};
+const DECK_PALETTE = ["#0ea5e9", "#8b5cf6", "#f59e0b", "#10b981", "#ec4899", "#6366f1"];
 function deckColor(name: string) {
-  return DECK_COLORS[name] ?? "#64748b";
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return DECK_PALETTE[Math.abs(h) % DECK_PALETTE.length];
 }
 
 export default function Widget() {
@@ -26,11 +21,6 @@ export default function Widget() {
     setStats(s);
     setDue(s.reduce((a, x) => a + x.due, 0));
     setFresh(s.reduce((a, x) => a + x.newCount, 0));
-    // Also trigger tray update via main? Widget doesn't need to update tray, but we can
-    try {
-      const dueCards = await getDueCards(1);
-      void dueCards;
-    } catch {}
   }
 
   useEffect(() => {

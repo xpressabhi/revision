@@ -2,6 +2,23 @@
 
 All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
+## [Unreleased]
+
+### Added
+- **Vitest suite** for the pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `handGestures` (`npm test`), and the release workflow now runs it before building.
+- **Opt-in cloud extraction** for article import (Settings → Article import): model/endpoint/key fields, Firecrawl key, and a consent toggle. With it off, only a direct fetch + local heuristic runs.
+
+### Fixed
+- **Data safety**: removed the silent SQLite→localStorage per-call fallback in `db.ts` (failures now surface instead of splitting data across stores), wrapped migrations/clear in transactions, and removed `@ts-nocheck`.
+- **Review flow**: burying no longer desyncs the queue index; rapid key repeats can no longer double-grade a card and skip the next one; due learning cards no longer appear twice in one queue; undo restores the DB review row and session stats.
+- **Security**: markdown link/cloze attributes are quote-escaped and a strict CSP is set (was `null`), closing an injection path from imported cards into Tauri IPC.
+- **Seeding**: `Clear all data` is now durable (no re-seed on next launch); demo content is idempotent and no longer duplicates cards/reviews.
+- **Editor**: advertised shortcuts now work (⌘↵ save, ⌃M/⌃⇧M math, ⌃⇧C cloze, ⌃⇧D generator, ⌃F preview) and math/cloze buttons target the active tab.
+- **Bookmarks**: import failures show a toast and fall back to the file picker instead of failing silently.
+- **Dates/analytics**: heatmap, streak and per-day charts use local calendar days; queue-bucket labels match their ranges.
+- **Quick capture**: clipboard paste is now an explicit button instead of an automatic read.
+- CSV parser handles quoted multi-line fields and maps headerless files as `front,back,tags`.
+
 ## [v0.5.0] — 2026-09-04 — "Visual overhaul"
 
 ### Changed

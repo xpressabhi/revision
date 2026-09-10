@@ -42,15 +42,34 @@ const THEMES: { id: ThemeId; name: string; sub: string; swatches: string[]; fg: 
 export function SettingsView(p: Props) {
   const [articleUrl, setArticleUrl] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [cloudOk, setCloudOk] = useState(() => localStorage.getItem("revision_cloud_ok") === "1");
+  const [zenModel, setZenModel] = useState(() => localStorage.getItem("revision_zen_model") ?? "");
+  const [zenEndpoint, setZenEndpoint] = useState(() => localStorage.getItem("revision_zen_endpoint") ?? "");
+  const [zenKey, setZenKey] = useState(() => localStorage.getItem("revision_zen_key") ?? "");
+  const [firecrawlKey, setFirecrawlKey] = useState(() => localStorage.getItem("revision_firecrawl_key") ?? "");
+
+  const saveLs = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  };
+  const setCloud = (v: boolean) => {
+    setCloudOk(v);
+    saveLs("revision_cloud_ok", v ? "1" : "0");
+  };
 
   const run = async (id: string, fn: () => Promise<void>) => {
     setBusy(id);
     try {
       await fn();
+    } catch (e) {
+      console.error(e);
     } finally {
       setBusy(null);
     }
   };
+
+  const fieldStyle: React.CSSProperties = { flex: 1, background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 8, padding: "6px 8px", fontSize: 11.5 };
 
   return (
     <div className="canvas-inner">
@@ -111,9 +130,29 @@ export function SettingsView(p: Props) {
         </div>
 
         <div className="set-card">
-          <h3>Import article (Zen)</h3>
-          <p>Fetch a URL, extract the text and generate flashcards locally.</p>
-          <div style={{ display: "flex", gap: 6 }}>
+          <h3>Article import (Zen, opt-in)</h3>
+          <p>Fetch a URL and generate a flashcard. Fetching is direct; <b>cloud extraction</b> sends the extracted text to opencode Zen free models and allows CORS proxies / Firecrawl fallbacks. Off = local heuristic only.</p>
+          <div className="set-row">
+            <span className="muted">Allow cloud extraction</span>
+            <button className={`btn btn-sm ${cloudOk ? "btn-primary" : ""}`} onClick={() => setCloud(!cloudOk)}>{cloudOk ? "On" : "Off"}</button>
+          </div>
+          <div className="set-row">
+            <span className="muted">Zen model</span>
+            <input style={fieldStyle} value={zenModel} onChange={(e) => { setZenModel(e.target.value); saveLs("revision_zen_model", e.target.value); }} placeholder="nemotron-3.5-lightning-free" />
+          </div>
+          <div className="set-row">
+            <span className="muted">Zen endpoint (optional)</span>
+            <input style={fieldStyle} value={zenEndpoint} onChange={(e) => { setZenEndpoint(e.target.value); saveLs("revision_zen_endpoint", e.target.value); }} placeholder="http://localhost:4096/v1/chat/completions" />
+          </div>
+          <div className="set-row">
+            <span className="muted">Zen API key (optional)</span>
+            <input type="password" style={fieldStyle} value={zenKey} onChange={(e) => { setZenKey(e.target.value); saveLs("revision_zen_key", e.target.value); }} placeholder="sk-…" />
+          </div>
+          <div className="set-row">
+            <span className="muted">Firecrawl key (optional)</span>
+            <input type="password" style={fieldStyle} value={firecrawlKey} onChange={(e) => { setFirecrawlKey(e.target.value); saveLs("revision_firecrawl_key", e.target.value); }} placeholder="fc-…" />
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <input
               value={articleUrl}
               onChange={(e) => setArticleUrl(e.target.value)}
