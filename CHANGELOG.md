@@ -2,7 +2,7 @@
 
 All notable changes to Revision. Releases are published automatically from `v*` tags by `.github/workflows/release.yml` — see the [release checklist](AGENTS.md) (version in 3 manifests, README links + sizes, this file).
 
-## [Unreleased]
+## [v0.6.0] — 2026-09-10 — "Focus"
 
 ### Added
 - **Vitest suite** for the pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `backup` (`npm test`), and the release workflow now runs it before building.
@@ -91,7 +91,8 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 - Blind 75 seed (75 LeetCode questions) + 13 starter cards; CSV import/export; import Chrome bookmarks; article import with on-device Zen AI card generation.
 - **Release pipeline**: GitHub Actions matrix build (macOS arm64 / x64 / Windows) — first version with installers + the release workflow.
 
-[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.6.0...HEAD
+[v0.6.0]: https://github.com/xpressabhi/revision/releases/tag/v0.6.0
 [v0.5.0]: https://github.com/xpressabhi/revision/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/xpressabhi/revision/releases/tag/v0.4.0
 [v0.3.1]: https://github.com/xpressabhi/revision/releases/tag/v0.3.1
