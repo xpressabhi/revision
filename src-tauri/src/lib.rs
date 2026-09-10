@@ -2,53 +2,21 @@
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
-
-#[derive(serde::Deserialize)]
-struct DeckStat {
-    name: String,
-    due: i32,
-    total: i32,
-}
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 #[tauri::command]
-fn update_tray(app: AppHandle, due: i32, new: i32, total: i32, decks: Vec<DeckStat>) -> Result<(), String> {
+fn update_tray(app: AppHandle, due: i32, new: i32, total: i32) -> Result<(), String> {
     println!("[boot] frontend mounted — due={} new={} total={}", due, new, total);
     let tray = app.tray_by_id("main").ok_or("tray not found")?;
     let title = format!("Revision — Due {} • New {} • Total {}", due, new, total);
     let header = MenuItem::with_id(&app, "header", title, false, None::<&str>).map_err(|e| e.to_string())?;
     let review_i = MenuItem::with_id(&app, "review", "▶ Start Review", true, None::<&str>).map_err(|e| e.to_string())?;
     let show_i = MenuItem::with_id(&app, "show", "Show Revision", true, None::<&str>).map_err(|e| e.to_string())?;
-    let widget_i = MenuItem::with_id(&app, "widget", "Toggle Widget", true, None::<&str>).map_err(|e| e.to_string())?;
     let sep1 = PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
     let sep2 = PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
     let quit_i = MenuItem::with_id(&app, "quit", "Quit", true, None::<&str>).map_err(|e| e.to_string())?;
 
-    // If decks provided, add a disabled summary line per deck (optional, keep simple)
-    let menu = if decks.is_empty() {
-        Menu::with_items(&app, &[&header, &sep1, &review_i, &show_i, &widget_i, &sep2, &quit_i]).map_err(|e| e.to_string())?
-    } else {
-        // Build with up to 4 deck lines as disabled items
-        let mut deck_items: Vec<MenuItem<tauri::Wry>> = Vec::new();
-        for d in decks.iter().take(4) {
-            let label = format!("{} — Due {} • {}", d.name, d.due, d.total);
-            let short = if label.chars().count() > 48 {
-                format!("{}…", label.chars().take(47).collect::<String>())
-            } else {
-                label
-            };
-            let item = MenuItem::with_id(&app, format!("deck_{}", d.name), short, false, None::<&str>).map_err(|e| e.to_string())?;
-            deck_items.push(item);
-        }
-        // Need to keep deck_items alive while building menu, so we handle references carefully
-        match deck_items.len() {
-            0 => Menu::with_items(&app, &[&header, &sep1, &review_i, &show_i, &widget_i, &sep2, &quit_i]).map_err(|e| e.to_string())?,
-            1 => Menu::with_items(&app, &[&header, &sep1, &review_i, &show_i, &widget_i, &sep2, &deck_items[0], &quit_i]).map_err(|e| e.to_string())?,
-            2 => Menu::with_items(&app, &[&header, &sep1, &review_i, &show_i, &widget_i, &sep2, &deck_items[0], &deck_items[1], &quit_i]).map_err(|e| e.to_string())?,
-            3 => Menu::with_items(&app, &[&header, &sep1, &review_i, &show_i, &widget_i, &sep2, &deck_items[0], &deck_items[1], &deck_items[2], &quit_i]).map_err(|e| e.to_string())?,
-            _ => Menu::with_items(&app, &[&header, &sep1, &review_i, &show_i, &widget_i, &sep2, &deck_items[0], &deck_items[1], &deck_items[2], &deck_items[3], &quit_i]).map_err(|e| e.to_string())?,
-        }
-    };
-
+    let menu = Menu::with_items(&app, &[&header, &sep1, &review_i, &show_i, &sep2, &quit_i]).map_err(|e| e.to_string())?;
     tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
     let tooltip = format!("Revision — Due {} • New {}", due, new);
     let _ = tray.set_tooltip(Some(tooltip));
@@ -61,29 +29,69 @@ fn debug_log(msg: String) {
     println!("[webview] {}", msg);
 }
 
+/// Extract an Anki deck (`.apkg`) or stage a raw Anki SQLite file for import.
+/// Returns the absolute path of a `collection.anki21` SQLite file inside the
+/// app data dir, which the frontend then opens read-only via the SQL plugin.
 #[tauri::command]
-fn toggle_widget(app: AppHandle) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("widget") {
-        if w.is_visible().unwrap_or(false) {
-            w.hide().map_err(|e| e.to_string())?;
-        } else {
-            w.show().map_err(|e| e.to_string())?;
-            w.set_focus().map_err(|e| e.to_string())?;
+fn stage_anki_db(app: AppHandle, path: String) -> Result<String, String> {
+    use std::io::Read;
+
+    let data_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let out_dir = data_dir.join("anki-import");
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    let dest = out_dir.join("collection.anki21");
+    let rel = "anki-import/collection.anki21".to_string();
+    let src = std::path::PathBuf::from(&path);
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if ext == "apkg" || ext == "zip" {
+        let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
+        let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+
+        if archive.by_name("collection.anki21").is_ok() {
+            let mut entry = archive.by_name("collection.anki21").map_err(|e| e.to_string())?;
+            let mut out = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+            return Ok(rel.clone());
         }
+        if archive.by_name("collection.anki2").is_ok() {
+            let mut entry = archive.by_name("collection.anki2").map_err(|e| e.to_string())?;
+            let mut out = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+            return Ok(rel.clone());
+        }
+        if archive.by_name("collection.anki21b").is_ok() {
+            let mut entry = archive.by_name("collection.anki21b").map_err(|e| e.to_string())?;
+            let mut compressed = Vec::new();
+            entry.read_to_end(&mut compressed).map_err(|e| e.to_string())?;
+            let decoded = zstd::stream::decode_all(compressed.as_slice()).map_err(|e| e.to_string())?;
+            std::fs::write(&dest, decoded).map_err(|e| e.to_string())?;
+            return Ok(rel.clone());
+        }
+        return Err("No collection database found in the .apkg".into());
     }
-    Ok(())
+
+    std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
+    Ok(rel)
 }
 
 #[tauri::command]
-fn hide_widget(app: AppHandle) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("widget") {
-        w.hide().map_err(|e| e.to_string())?;
+fn cleanup_anki_import(app: AppHandle) -> Result<(), String> {
+    let data_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let dir = data_dir.join("anki-import");
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let capture_shortcut = Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::KeyK);
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
@@ -93,77 +101,92 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .setup(|app| {
-            let show_i = MenuItem::with_id(app, "show", "Show Revision", true, None::<&str>)?;
-            let review_i = MenuItem::with_id(app, "review", "▶ Start Review", true, None::<&str>)?;
-            let widget_i = MenuItem::with_id(app, "widget", "Toggle Widget", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let sep = PredefinedMenuItem::separator(app)?;
-            let header = MenuItem::with_id(app, "header", "Revision — Loading…", false, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&header, &sep, &review_i, &show_i, &widget_i, &quit_i])?;
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler({
+                    let shortcut = capture_shortcut.clone();
+                    move |app, pressed, event| {
+                        if event.state() == ShortcutState::Pressed && pressed == &shortcut {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                            let _ = app.emit("global-capture", ());
+                        }
+                    }
+                })
+                .build(),
+        )
+        .setup({
+            let shortcut = capture_shortcut.clone();
+            move |app| {
+                if let Err(e) = app.global_shortcut().register(shortcut) {
+                    println!("[shortcut] could not register global capture hotkey: {}", e);
+                }
+                let show_i = MenuItem::with_id(app, "show", "Show Revision", true, None::<&str>)?;
+                let review_i = MenuItem::with_id(app, "review", "▶ Start Review", true, None::<&str>)?;
+                let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+                let sep = PredefinedMenuItem::separator(app)?;
+                let header = MenuItem::with_id(app, "header", "Revision — Loading…", false, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&header, &sep, &review_i, &show_i, &quit_i])?;
 
-            let _tray = TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Revision — Active Recall")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
-                    "review" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                            let _ = w.emit("tray-review", ());
-                        }
-                    }
-                    "widget" => {
-                        if let Some(w) = app.get_webview_window("widget") {
-                            if w.is_visible().unwrap_or(false) {
-                                let _ = w.hide();
-                            } else {
+                let _tray = TrayIconBuilder::with_id("main")
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .tooltip("Revision — Active Recall")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(w) = app.get_webview_window("main") {
                                 let _ = w.show();
                                 let _ = w.set_focus();
                             }
                         }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                        "review" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                                let _ = w.emit("tray-review", ());
+                            }
                         }
-                    }
-                })
-                .build(app)?;
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                    })
+                    .build(app)?;
 
-            Ok(())
+                Ok(())
+            }
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let label = window.label();
-                if label == "main" || label == "widget" {
+                if window.label() == "main" {
                     let _ = window.hide();
                     api.prevent_close();
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![update_tray, toggle_widget, hide_widget, debug_log])
+        .invoke_handler(tauri::generate_handler![
+            update_tray,
+            debug_log,
+            stage_anki_db,
+            cleanup_anki_import
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

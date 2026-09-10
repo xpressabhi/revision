@@ -26,8 +26,4 @@ dist-ssr
 .firecrawl/
 blind75.json
 seed-snippet.ts
-# WidgetKit build artifacts (generated)
-src-tauri/RevisionWidget/build/
-src-tauri/RevisionWidget/*.xcodeproj
-src-tauri/RevisionWidget/*.xcworkspace
 /.playwright-mcp

@@ -1,16 +1,13 @@
 import type Database from "@tauri-apps/plugin-sql";
-import type { CardState, CardWithState, Deck, DeckStats, ReviewRow } from "./types";
+import type { BackupFile, CardState, CardWithState, Deck, DeckStats, ImportCardRow, ReviewRow } from "./types";
 import { DEFAULT_EASE, DEFAULT_STABILITY, DEFAULT_DIFFICULTY } from "./fsrs";
 import {
   browserInitDb,
   browserGetDecks,
-  browserCreateDeck,
-  browserDeleteDeck,
   browserCreateCard,
   browserUpdateCard,
   browserDeleteCard,
   browserGetAllCardsWithState,
-  browserGetDueCards,
   browserGetDeckStats,
   browserUpdateCardState,
   browserLogReviewAt,
@@ -19,6 +16,8 @@ import {
   browserClearAllCards,
   browserDeduplicateCards,
   browserDeleteLastReview,
+  browserImportCards,
+  browserRestoreBackup,
 } from "./db.browser";
 
 function isTauriRuntime(): boolean {
@@ -165,19 +164,6 @@ export async function getDecks(): Promise<Deck[]> {
   return db.select<Deck[]>("SELECT * FROM decks ORDER BY id ASC");
 }
 
-export async function createDeck(name: string): Promise<void> {
-  if (useBrowserStorage) return browserCreateDeck(name);
-  const db = await getDb();
-  const now = new Date().toISOString();
-  await db.execute("INSERT INTO decks (name, created_at) VALUES ($1, $2)", [name.trim(), now]);
-}
-
-export async function deleteDeck(id: number): Promise<void> {
-  if (useBrowserStorage) return browserDeleteDeck(id);
-  const db = await getDb();
-  await db.execute("DELETE FROM decks WHERE id=$1", [id]);
-}
-
 export async function createCard(
   deckId: number,
   front: string,
@@ -257,27 +243,6 @@ export async function getAllCardsWithState(opts?: {
   return db.select<CardWithState[]>(sql, params);
 }
 
-export async function getDueCards(limitNew = 20): Promise<CardWithState[]> {
-  if (useBrowserStorage) return browserGetDueCards(limitNew);
-  const db = await getDb();
-  const now = new Date().toISOString();
-  const due = await db.select<CardWithState[]>(
-    `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
-     FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
-     WHERE cs.due_at <= $1 AND cs.state != 'new'
-     ORDER BY cs.due_at ASC LIMIT 200`,
-    [now]
-  );
-  const newCards = await db.select<CardWithState[]>(
-    `SELECT c.*, d.name as deck_name, cs.state, cs.due_at, cs.interval, cs.ease, cs.reps, cs.stability, cs.difficulty
-     FROM cards c JOIN decks d ON d.id=c.deck_id JOIN card_state cs ON cs.card_id=c.id
-     WHERE cs.state='new'
-     ORDER BY c.created_at ASC LIMIT $1`,
-    [limitNew]
-  );
-  return [...due, ...newCards];
-}
-
 export async function getDeckStats(): Promise<DeckStats[]> {
   if (useBrowserStorage) return browserGetDeckStats();
   const db = await getDb();
@@ -343,10 +308,6 @@ export async function getReviews(): Promise<ReviewRow[]> {
   return db.select<ReviewRow[]>("SELECT id, card_id, grade, created_at FROM reviews ORDER BY created_at ASC");
 }
 
-export async function exportAllCards(): Promise<CardWithState[]> {
-  return getAllCardsWithState();
-}
-
 export async function bulkCreateCards(
   rows: { deckName: string; front: string; back: string; tags: string }[]
 ): Promise<number> {
@@ -373,6 +334,74 @@ export async function bulkCreateCards(
     created++;
   }
   return created;
+}
+
+export async function importCards(deckId: number, rows: ImportCardRow[]): Promise<number> {
+  if (useBrowserStorage) return browserImportCards(deckId, rows);
+  const db = await getDb();
+  await db.execute("BEGIN");
+  try {
+    let created = 0;
+    const now = new Date().toISOString();
+    for (const r of rows) {
+      const res = await db.execute(
+        "INSERT INTO cards (deck_id, front, back, tags, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)",
+        [deckId, r.front.trim(), r.back.trim(), r.tags.trim(), now]
+      );
+      const id = res.lastInsertId ?? 0;
+      await db.execute(
+        "INSERT INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [id, r.due_at, r.interval, DEFAULT_EASE, r.reps, r.state, r.stability, r.difficulty, now]
+      );
+      created++;
+    }
+    await db.execute("COMMIT");
+    return created;
+  } catch (e) {
+    await db.execute("ROLLBACK");
+    throw e;
+  }
+}
+
+export async function restoreBackup(backup: Pick<BackupFile, "cards" | "reviews">): Promise<void> {
+  if (useBrowserStorage) return browserRestoreBackup(backup);
+  const db = await getDb();
+  const decks = await getDecks();
+  const deckId = decks[0]?.id;
+  if (!deckId) throw new Error("No deck to restore into");
+  await db.execute("BEGIN");
+  try {
+    await db.execute("DELETE FROM reviews");
+    await db.execute("DELETE FROM card_state");
+    await db.execute("DELETE FROM cards");
+    await db.execute("DELETE FROM sqlite_sequence WHERE name='cards' OR name='reviews'");
+    for (const c of backup.cards) {
+      await db.execute(
+        "INSERT INTO cards (id, deck_id, front, back, tags, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        [c.id, deckId, c.front, c.back, c.tags, c.created_at, c.updated_at]
+      );
+      await db.execute(
+        "INSERT INTO card_state (card_id, due_at, interval, ease, reps, state, stability, difficulty, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [c.id, c.due_at, c.interval, c.ease, c.reps, c.state, c.stability, c.difficulty, c.updated_at]
+      );
+    }
+    const CHUNK = 200;
+    for (let i = 0; i < backup.reviews.length; i += CHUNK) {
+      const chunk = backup.reviews.slice(i, i + CHUNK);
+      const values: string[] = [];
+      const params: unknown[] = [];
+      chunk.forEach((r, j) => {
+        const b = j * 3;
+        values.push(`($${b + 1},$${b + 2},$${b + 3})`);
+        params.push(r.card_id, r.grade, r.created_at);
+      });
+      await db.execute(`INSERT INTO reviews (card_id, grade, created_at) VALUES ${values.join(",")}`, params);
+    }
+    await db.execute("COMMIT");
+  } catch (e) {
+    await db.execute("ROLLBACK");
+    throw e;
+  }
 }
 
 export async function clearAllCards(): Promise<void> {

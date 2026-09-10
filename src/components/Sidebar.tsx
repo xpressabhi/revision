@@ -8,6 +8,7 @@ type Props = {
   groups: TagNode[];
   cards: CardWithState[];
   lastReview: Map<number, string>;
+  lapses: Map<number, number>;
   rail: boolean;
   activeGroup: string | null;
   onGroup: (full: string | null) => void;
@@ -33,22 +34,24 @@ function itemProps(fn: () => void) {
   };
 }
 
-export function Sidebar({ groups, cards, lastReview, rail, activeGroup, onGroup, onSmart, onStudy, onNewCard, onView, toggleFocus, reviewActive }: Props) {
+export function Sidebar({ groups, cards, lastReview, lapses, rail, activeGroup, onGroup, onSmart, onStudy, onNewCard, onView, toggleFocus, reviewActive }: Props) {
   const [openRoots, setOpenRoots] = useState<Set<string>>(new Set());
 
   const roots = useMemo(() => groups.filter((g) => !g.child), [groups]);
   const smart = useMemo(() => {
-    const d = smartFilterCount(cards, "due", lastReview);
-    const n = smartFilterCount(cards, "new", lastReview);
-    const l = smartFilterCount(cards, "learning", lastReview);
-    const s = smartFilterCount(cards, "stuck", lastReview);
+    const d = smartFilterCount(cards, "due", lastReview, lapses);
+    const n = smartFilterCount(cards, "new", lastReview, lapses);
+    const l = smartFilterCount(cards, "learning", lastReview, lapses);
+    const s = smartFilterCount(cards, "stuck", lastReview, lapses);
+    const le = smartFilterCount(cards, "leeches", lastReview, lapses);
     return [
       { id: "due", label: "Due now", ico: "clock" as const, count: d, tone: d > 0 ? "due" as const : null },
       { id: "stuck", label: "Stuck < 80%", ico: "warn" as const, count: s, tone: s > 0 ? "due" as const : null },
+      { id: "leeches", label: "Leeches", ico: "flame" as const, count: le, tone: le > 0 ? "due" as const : null },
       { id: "learning", label: "Learning", ico: "bolt" as const, count: l, tone: "learning" as const },
       { id: "new", label: "New cards", ico: "sparkles" as const, count: n, tone: "new" as const },
     ];
-  }, [cards, lastReview]);
+  }, [cards, lastReview, lapses]);
 
   const dim = rail;
 
@@ -116,13 +119,6 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, onGroup,
 
         {!dim && (
           <div className="sb-section">
-            <div className="sb-label">Tag Graph</div>
-            <TagGraph groups={groups} onPick={(full) => onGroup(full)} onStudy={() => onStudy({ kind: "all" })} />
-          </div>
-        )}
-
-        {!dim && (
-          <div className="sb-section">
             <div className="sb-label">Overview</div>
             <div className="sb-item" {...itemProps(() => onView("dashboard"))}><span className="sb-ico"><Icon name="graph" /></span><span>Dashboard</span></div>
             <div className="sb-item" {...itemProps(() => onView("analytics"))}><span className="sb-ico"><Icon name="chart" /></span><span>Study Analytics</span></div>
@@ -143,73 +139,5 @@ export function Sidebar({ groups, cards, lastReview, rail, activeGroup, onGroup,
         </div>
       </div>
     </aside>
-  );
-}
-
-/** Minimal co-occurrence tag graph: nodes sized by card count. */
-function TagGraph({ groups, onPick, onStudy }: { groups: TagNode[]; onPick: (full: string) => void; onStudy: () => void }) {
-  const top = useMemo(() => groups.slice(0, 9), [groups]);
-  const W = 176;
-  const H = 108;
-  const nodes = useMemo(() => {
-    if (!top.length) return [];
-    const max = Math.max(...top.map((t) => t.total));
-    return top.map((t, i) => {
-      const angle = (i / top.length) * Math.PI * 2 - Math.PI / 2;
-      const rad = 34 + (t.total / max) * 8;
-      return {
-        ...t,
-        x: W / 2 + Math.cos(angle) * rad,
-        y: H / 2 + Math.sin(angle) * rad,
-        r: 7 + (t.total / max) * 7,
-      };
-    });
-  }, [top]);
-
-  if (!top.length) {
-    return (
-      <div className="tag-graph" style={{ padding: 18, fontSize: 11, color: "var(--text-3)", textAlign: "center" }}>
-        No tags yet. Create cards or load demo content.
-      </div>
-    );
-  }
-
-  return (
-    <div className="tag-graph" style={{ position: "relative" }}>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
-        {nodes.map((n, i) =>
-          nodes.slice(i + 1).map((m, j) => (
-            <line key={`${i}-${j}`} className="tg-edge" x1={n.x} y1={n.y} x2={m.x} y2={m.y} strokeWidth={0.5} opacity={0.35} />
-          )),
-        )}
-        {nodes.map((n) => (
-          <g
-            key={n.full}
-            className="tg-node"
-            role="button"
-            tabIndex={0}
-            aria-label={`Browse ${n.full}, ${n.total} cards`}
-            onClick={() => onPick(n.full)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onPick(n.full);
-              }
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            <circle cx={n.x} cy={n.y} r={n.r} fill="var(--accent-dim)" stroke="var(--accent-glow)" strokeWidth={1} />
-            <text className="tg-label" x={n.x} y={n.y + 2.5} textAnchor="middle">{n.root.slice(0, 10)}</text>
-          </g>
-        ))}
-      </svg>
-      <button
-        onClick={onStudy}
-        style={{ position: "absolute", right: 6, top: 6, fontSize: 10, color: "var(--accent)", fontWeight: 600 }}
-        title="Study everything"
-      >
-        Study all
-      </button>
-    </div>
   );
 }

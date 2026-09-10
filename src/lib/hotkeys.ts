@@ -32,6 +32,7 @@ export const SHORTCUTS: Chord[] = [
   // Global
   { keys: "mod+k", label: "⌘K", scope: "global", desc: "Command bar (decks, cards, actions)" },
   { keys: "mod+shift+k", label: "⌘⇧K", scope: "global", desc: "Quick capture" },
+  { keys: "alt+shift+k", label: "⌥⇧K", scope: "global", desc: "Quick capture (system-wide, desktop app)" },
   { keys: "mod+1", label: "⌘1", scope: "global", desc: "Dashboard" },
   { keys: "mod+2", label: "⌘2", scope: "global", desc: "Browse" },
   { keys: "mod+3", label: "⌘3", scope: "global", desc: "Review" },
@@ -56,7 +57,6 @@ export const SHORTCUTS: Chord[] = [
   { keys: "3", label: "3", scope: "review", desc: "Grade: Good (6d)" },
   { keys: "4", label: "4", scope: "review", desc: "Grade: Easy (14d)" },
   { keys: "g", label: "G", scope: "review", desc: "Reveal next cloze block" },
-  { keys: "h", label: "H", scope: "review", desc: "Next AI hint (inspector)" },
   { keys: "e", label: "E", scope: "review", desc: "Edit card" },
   { keys: "s", label: "S", scope: "review", desc: "Suspend card" },
   { keys: "b", label: "B", scope: "review", desc: "Bury for this session" },
@@ -70,7 +70,6 @@ export const SHORTCUTS: Chord[] = [
   { keys: "ctrl+m", label: "⌃M", scope: "editor", desc: "Inline math wrap" },
   { keys: "ctrl+shift+m", label: "⌃⇧M", scope: "editor", desc: "Display math wrap" },
   { keys: "ctrl+shift+c", label: "⌃⇧C", scope: "editor", desc: "Cloze wrap selection" },
-  { keys: "ctrl+shift+d", label: "⌃⇧D", scope: "editor", desc: "AI generator drawer" },
   { keys: "ctrl+f", label: "⌃F", scope: "editor", desc: "Focus preview pane" },
 
   // Capture

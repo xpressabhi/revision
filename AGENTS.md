@@ -1,6 +1,6 @@
 # AGENTS.md — guidance for AI agents working in this repo
 
-Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + React 19 + TypeScript + Vite 7 + KaTeX**, FSRS-5 scheduler, SQLite via `tauri-plugin-sql` with a `localStorage` fallback for plain-browser runs.
+Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + React 19 + TypeScript + Vite 7 + KaTeX**, FSRS-5 scheduler, SQLite via `tauri-plugin-sql` (with a `localStorage` build for plain-browser runs).
 
 ## Commands
 
@@ -12,9 +12,8 @@ Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + Reac
 | Unit tests (Vitest) | `npm test` (or `npm run test:watch`) |
 | Tauri debug build only | `npx tauri build --debug` |
 | Install built app to /Applications | `./scripts/install-to-applications.sh` (or `npm run tauri:build:install` = build + install) |
-| Build/install macOS WidgetKit widget | `./scripts/build-widget.sh` |
 
-**Verification = `npm test` + `npm run build` + manual/dev-server checks.** Vitest covers the pure libs (`fsrs`, `derive`, `csv`, `markdown`, `session`, `handGestures`); there are no component/DOM tests. Playwright MCP against `http://localhost:1420` works for manual checks (note the dev server may already be running — reuse it, don't start a second one).
+**Verification = `npm test` + `npm run build` + manual/dev-server checks.** Vitest covers the pure libs (`fsrs`, `derive`, `csv`, `markdown`, `session`, `backup`); there are no component/DOM tests. Playwright MCP against `http://localhost:1420` works for manual checks (note the dev server may already be running — reuse it, don't start a second one).
 
 ## Releasing (READ FIRST — version lives in 3 places)
 
@@ -32,22 +31,21 @@ Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + Reac
 
 ## Architecture
 
-- `src/App.tsx` — shell: 3-pane layout, global keyboard handler, review state machine, toasts. `src/lib/` — pure logic (fsrs, db, derive, markdown, ai, hotkeys, search, csv). `src/components/` — views (Dashboard, ReviewView, BrowseView, AnalyticsView, SettingsView, EditorModal, QuickCapture, CommandBar, Inspector, Sidebar, Toast, ui).
-- Review mapping: hidden card → flip (Space/Enter/click/flick); shown card → grade 1–4 (keys 1–4, Space grades Good, drag/air-swipe directions ← Again · → Good · ↑ Easy · ↓ Hard).
-- DB: `src/lib/db.ts` (SQLite via Tauri) with `db.browser.ts` (localStorage) fallback — keep both in sync when changing schema/fields.
-- macOS app bundle lives at `/Applications/Revision.app` (installed via script); macOS camera permission is wired via `src-tauri/Info.plist` + `src-tauri/Entitlements.plist` (referenced in `tauri.conf.json` `bundle.macOS.entitlements`).
+- `src/App.tsx` — shell: 3-pane layout, global keyboard handler, review state machine, toasts. `src/lib/` — pure logic (fsrs, db, derive, markdown, backup, anki, hotkeys, search, csv). `src/components/` — views (Dashboard, ReviewView, BrowseView, AnalyticsView, SettingsView, EditorModal, QuickCapture, CommandBar, Inspector, Sidebar, ImportModal, Toast, ui).
+- Review mapping: hidden card → flip (Space/Enter/click/flick); shown card → grade 1–4 (keys 1–4, Space grades Good, drag directions ← Again · → Good · ↑ Easy · ↓ Hard).
+- DB: `src/lib/db.ts` (SQLite via Tauri) with `db.browser.ts` (localStorage) build — keep both in sync when changing schema/fields. The adapter is chosen once at boot; there is no per-call fallback.
+- Backups: `src/lib/backup.ts` (JSON export/import + `recall_autobackup` snapshot before destructive ops). Anki import: Rust `stage_anki_db` (zip/zstd) + `src/lib/anki.ts` (reads the staged SQLite through the sql plugin).
+- macOS app bundle lives at `/Applications/Revision.app` (installed via script).
 
-## Gestures (added v0.3.0)
+## Gestures (v0.3.0, camera mode removed later)
 
 - Pointer drag layer: `src/lib/gestures.ts` (`useDragGesture` hook — deadzone, axis-lock, tap/flip/grade thresholds, fly-out + spring-back) wired in `ReviewView.tsx` on `.flip-wrap`.
-- Camera air gestures (opt-in, Settings → Gestures): `src/components/HandOverlay.tsx` (getUserMedia + MediaPipe detect loop, PiP preview + landmark skeleton) and `src/lib/handGestures.ts` (pinch/swipe classifier with synthetic-testable update API).
-- MediaPipe WASM + `hand_landmarker.task` are **committed** under `public/mediapipe/` (app must work offline; the .task model is ~7.8 MB, downloaded from Google's model hub — re-download if missing). The `@mediapipe/tasks-vision` JS bundle is dynamic-imported so it only loads when camera mode is on.
-- Headless/CI environments have no camera: `getUserMedia` hangs → `HandOverlay` has a 10 s watchdog (status "timeout"). All gestures must be tried in the real app for camera tuning.
+- Camera air gestures (MediaPipe) were **removed** — do not reintroduce `getUserMedia`/camera assets without a product decision; the app is pointer/keyboard only.
 
 ## Gotchas
 
-- Two dev-server-first ports: 1420 (main app). Tray + widget are separate Tauri windows (widget = `index.html?widget=1`).
-- WidgetKit widget lives in `src-tauri/RevisionWidget/` (Swift + XcodeGen). `install-to-applications.sh` embeds it but the embed step is buggy when run from repo root (looks for the bundle in the wrong cwd) — if PlugIns is empty, embed manually: `cp -R src-tauri/RevisionWidget/build/Release/RevisionWidget.appex /Applications/Revision.app/Contents/PlugIns/` then `pluginkit -a`.
+- Dev server port 1420 (main app). Tray is the only extra surface (no widget windows anymore).
 - `tsc` is strict (verbatimModuleSyntax) — use `import type` for type-only imports.
 - No comments in code unless the user asks; match existing commit style (`feat:`/`fix:` lowercase, no scope).
-- Settings/theme/density persist in `localStorage` (`recall_*` keys). Air-gestures toggle key: `recall_air_gestures` ("1"/"0").
+- Settings/theme/density/limits persist in `localStorage` (`recall_*` keys). Global quick capture is `⌥⇧K` (registered in Rust, event `global-capture`).
+- The Anki staging command extracts to the app config dir (`anki-import/collection.anki21`) because `tauri-plugin-sql` resolves `sqlite:` paths relative to `app_config_dir()`.

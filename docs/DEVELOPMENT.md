@@ -28,7 +28,7 @@ npm run build            # web build only -> dist/
 
 Requires Rust 1.70+ and system deps (Xcode CLI tools on macOS).
 
-**Verification:** `npm test` (Vitest, pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `handGestures`) plus `npm run build` (tsc strict + vite). There are no component/DOM tests yet.
+**Verification:** `npm test` (Vitest, pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `backup`) plus `npm run build` (tsc strict + vite). There are no component/DOM tests yet.
 
 ## Project layout
 
@@ -37,29 +37,27 @@ revision/
   src/
     App.tsx                 # shell: 3-pane layout, keyboard master, review state machine
     App.css                 # design system: tokens (4 themes), components, motion
-    Widget.tsx              # 340×190 transparent widget window (Due/New/Total)
     components/             # Sidebar, CommandBar, Inspector, Dashboard, ReviewView,
                             # EditorModal, BrowseView, AnalyticsView, SettingsView,
-                            # QuickCapture, HandOverlay, Toast, ui (icons/ring/keycaps)
+                            # QuickCapture, ImportModal, Toast, ui (icons/ring/keycaps)
     lib/
       fsrs.ts               # FSRS-5 scheduler + interval/retrievability predictions
-      db.ts / db.browser.ts # SQLite + localStorage fallback (with FSRS migration)
+      db.ts / db.browser.ts # SQLite (Tauri) + localStorage build, chosen at boot
       gestures.ts           # drag-gesture hook (tap/flip/grade, fly-out, spring-back)
-      handGestures.ts       # camera hand classifier (pinch + 4-direction swipes)
-      markdown.tsx / katex.ts  # cloze + KaTeX-aware markdown renderer
+      backup.ts             # JSON backup/restore + auto-snapshot before destructive ops
+      anki.ts               # Anki collection reader (via Rust staging + sql plugin)
+      markdown.tsx / katex.ts  # cloze + KaTeX-aware markdown renderer (with images)
       demo.ts               # deterministic demo content + review history
-      ai.ts                 # on-device hint + card generators (no API)
-      derive.ts             # tag tree, queues, heatmap, streaks, forecasts
+      derive.ts             # tag tree, queues, limits, leeches, heatmap, streaks, forecasts
       hotkeys.ts / search.ts # shortcut matrix + fuzzy matching
-      types.ts, csv.ts, seed.ts, article.ts, bookmarks.ts
+      types.ts, csv.ts, seed.ts, bookmarks.ts
   src-tauri/
-    Cargo.toml, tauri.conf.json (main + widget windows, overlay titlebar)
-    Info.plist / Entitlements.plist   # macOS camera permission (air gestures)
-    RevisionWidget/         # WidgetKit desktop widget (Swift, project.yml via xcodegen)
+    Cargo.toml, tauri.conf.json (single main window, overlay titlebar, CSP)
+    Entitlements.plist      # ad-hoc signing entitlements
+    src/lib.rs              # tray, global shortcut (⌥⇧K), Anki staging commands
   public/
-    mediapipe/              # bundled WASM + hand_landmarker.task (offline air gestures)
-    blind75.csv             # Blind 75 import file
-  docs/                     # this doc + USER_GUIDE.md + PLAN-* trackers
+    revision-logo.png
+  docs/                     # this doc + USER_GUIDE.md + diagram sources
   CHANGELOG.md              # release history
   AGENTS.md                 # agent instructions (release checklist, gotchas)
 ```

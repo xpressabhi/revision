@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CardWithState } from "../lib/types";
 import { cardRetrievability, dueInLabel, formatInterval } from "../lib/fsrs";
 import { firstTag } from "../lib/derive";
@@ -15,13 +15,17 @@ type Props = {
   onDelete: (card: CardWithState) => void;
   onNew: () => void;
   counts: { total: number; due: number; newCount: number; learning: number };
-  onImportCsv: (file: File) => Promise<void>;
-  onExportCsv: () => Promise<void>;
+  onImport: () => void;
+  onExportCsv: () => void;
+  onBulkSuspend: (ids: number[]) => void;
+  onBulkReset: (ids: number[]) => void;
+  onBulkDelete: (ids: number[]) => void;
 };
 
 export function BrowseView(p: Props) {
   const [q, setQ] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const rows = useMemo(() => {
     let r = p.cards;
@@ -33,6 +37,42 @@ export function BrowseView(p: Props) {
     return r;
   }, [p.cards, p.groupFilter, p.stateFilter, q]);
 
+  useEffect(() => {
+    setSelected((s) => {
+      const live = new Set(p.cards.map((c) => c.id));
+      const next = new Set([...s].filter((id) => live.has(id)));
+      return next.size === s.size ? s : next;
+    });
+  }, [p.cards]);
+
+  const allSelected = rows.length > 0 && rows.every((c) => selected.has(c.id));
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && !allSelected;
+  }, [selected, allSelected]);
+
+  const toggle = (id: number) => {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected((s) => {
+      if (rows.every((c) => s.has(c.id))) {
+        const n = new Set(s);
+        for (const c of rows) n.delete(c.id);
+        return n;
+      }
+      const n = new Set(s);
+      for (const c of rows) n.add(c.id);
+      return n;
+    });
+  };
+
+  const ids = useMemo(() => [...selected], [selected]);
   const states = ["", "new", "learning", "review"];
   const groupOptions = useMemo(() => {
     const roots = Array.from(new Set(p.cards.map((c) => firstTag(c)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -48,15 +88,10 @@ export function BrowseView(p: Props) {
           <span className="sub">{p.counts.total} cards, {p.counts.due} due</span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}><Icon name="upload" size={12} /> Import CSV</button>
+          <button className="btn btn-ghost btn-sm" onClick={p.onImport}><Icon name="upload" size={12} /> Import</button>
           <button className="btn btn-ghost btn-sm" onClick={() => p.onExportCsv()}><Icon name="download" size={12} /> Export CSV</button>
           <button className="btn btn-primary" onClick={p.onNew}><Icon name="plus" size={12} /> New card</button>
         </div>
-        <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void p.onImportCsv(f);
-          e.target.value = "";
-        }} />
       </div>
 
       <div className="browse-toolbar">
@@ -78,10 +113,23 @@ export function BrowseView(p: Props) {
         <span className="chip mono" style={{ marginLeft: "auto" }}>{rows.length} shown</span>
       </div>
 
+      {selected.size > 0 && (
+        <div className="bulk-bar">
+          <span><b>{selected.size}</b> selected</span>
+          <button className="btn btn-sm" onClick={() => p.onBulkSuspend(ids)}>Suspend</button>
+          <button className="btn btn-sm" onClick={() => p.onBulkReset(ids)}>Reset scheduling</button>
+          <button className="btn btn-sm btn-danger" onClick={() => { if (confirm(`Delete ${ids.length} cards? This cannot be undone.`)) p.onBulkDelete(ids); }}>Delete</button>
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={() => setSelected(new Set())}>Clear</button>
+        </div>
+      )}
+
       <div className="table-wrap">
         <table className="tbl">
           <thead>
             <tr>
+              <th style={{ width: 30 }}>
+                <input ref={selectAllRef} type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all visible cards" />
+              </th>
               <th style={{ width: "34%" }}>Front</th>
               <th>Deck</th>
               <th>State</th>
@@ -94,8 +142,12 @@ export function BrowseView(p: Props) {
           <tbody>
             {rows.map((c) => {
               const r = cardRetrievability(c, p.lastReview.get(c.id));
+              const isSel = selected.has(c.id);
               return (
-                <tr key={c.id} onClick={() => p.onEdit(c)}>
+                <tr key={c.id} onClick={() => p.onEdit(c)} className={isSel ? "selected" : ""}>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={isSel} onChange={() => toggle(c.id)} aria-label={`Select ${c.front.slice(0, 40)}`} />
+                  </td>
                   <td className="td-front" title={c.front}>{c.front.replace(/\{\{c\d+::/g, "").replace(/\}\}/g, "").slice(0, 70)}</td>
                   <td className="td-sub">{firstTag(c)}</td>
                   <td><span className={`chip ${c.state}`}>{c.state === "new" ? "New" : c.state === "learning" ? "Learning" : "Review"}</span></td>
@@ -117,7 +169,7 @@ export function BrowseView(p: Props) {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <div className="empty-state" style={{ border: "none", padding: "40px 20px" }}>
                     Nothing matches. Create a card with <Icon name="plus" size={11} /> New card.
                   </div>

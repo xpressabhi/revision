@@ -73,7 +73,11 @@ export function renderMarkdown(text: string, revealCloze: number | "all" | null 
     return `@@INLINECODE_${idx}@@`;
   });
 
-  // 6) links
+  // 6) images (data: or https) then links
+  html = html.replace(
+    /!\[([^\]]*)\]\((data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|https?:\/\/[^\)\s]+)\)/g,
+    (_m, alt: string, src: string) => `<img src="${src}" alt="${alt}" class="md-img" loading="lazy" />`
+  );
   html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" class="md-link" target="_blank" rel="noopener noreferrer">$1</a>');
   html = html.replace(/(?<!href=")(https?:\/\/[^\s<\)\"]+)/g, (url) => {
     const clean = url.replace(/[.,;!]+$/, "");

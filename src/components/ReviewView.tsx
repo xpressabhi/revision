@@ -3,10 +3,9 @@ import type { CardWithState, Grade } from "../lib/types";
 import { cardRetrievability, predictIntervals } from "../lib/fsrs";
 import { MarkdownView } from "../lib/markdown";
 import { dragTransform, useDragGesture, type DragDir } from "../lib/gestures";
-import { HandOverlay } from "./HandOverlay";
 import { Icon, Keycap, fmtPct } from "./ui";
 
-export type Pomo = { seconds: number; running: boolean; mode: "focus" | "break" };
+export type SessionStats = { answered: number; again: number; good: number; lapsed: number; startedAt: number };
 
 type Props = {
   queue: CardWithState[];
@@ -24,16 +23,12 @@ type Props = {
   onSuspend: () => void;
   onBury: () => void;
   onEnd: () => void;
-  pomo: Pomo;
-  onPomoToggle: () => void;
-  onPomoSkip: () => void;
-  onPomoReset: () => void;
   canUndo: boolean;
-  sessionStats: { answered: number; again: number; good: number };
-  airGestures: boolean;
+  sessionStats: SessionStats;
   stale: boolean;
   onResume: () => void;
   onRestart: () => void;
+  onReviewLapses: () => void;
 };
 
 export function ReviewView(p: Props) {
@@ -70,19 +65,32 @@ export function ReviewView(p: Props) {
   };
 
   if (!card) {
+    const elapsed = Math.max(0, Date.now() - p.sessionStats.startedAt);
+    const minutes = Math.floor(elapsed / 60_000);
+    const seconds = Math.floor((elapsed % 60_000) / 1000);
+    const accuracy = p.sessionStats.answered > 0 ? Math.round(((p.sessionStats.answered - p.sessionStats.again) / p.sessionStats.answered) * 100) : 0;
     return (
       <div className="canvas-inner" style={{ maxWidth: 760, height: "100%", justifyContent: "center" }}>
-        <div className="review-empty">
-          <span className="big"><Icon name="wink" size={40} /></span>
+        <div className="review-empty session-summary">
+          <span className="big"><Icon name="check" size={34} /></span>
           <div style={{ fontSize: 17, fontWeight: 600 }}>Session complete</div>
-          <div style={{ fontSize: 12.5, color: "var(--text-3)" }}>
-            {done} cards reviewed ({p.sessionStats.good} good, {p.sessionStats.again} lapses)
+          <div className="summary-grid">
+            <div className="summary-stat"><span className="k">{done}</span><span className="l">cards</span></div>
+            <div className="summary-stat"><span className="k">{accuracy}%</span><span className="l">accuracy</span></div>
+            <div className="summary-stat"><span className="k">{p.sessionStats.again}</span><span className="l">lapses</span></div>
+            <div className="summary-stat"><span className="k">{minutes}:{String(seconds).padStart(2, "0")}</span><span className="l">time</span></div>
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <button className="btn btn-primary" onClick={p.onEnd}><Icon name="check" size={13} /> Back to dashboard</button>
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
+            {p.sessionStats.lapsed > 0 && (
+              <button className="btn btn-primary" onClick={p.onReviewLapses}>
+                <Icon name="undo" size={13} /> Review lapses ({p.sessionStats.lapsed})
+              </button>
+            )}
+            <button className="btn" onClick={p.onRestart}><Icon name="refresh" size={13} /> Study more</button>
+            <button className="btn btn-ghost" onClick={p.onEnd}>Back to dashboard</button>
           </div>
           <div style={{ fontSize: 11, color: "var(--text-4)", marginTop: 10 }}>
-            New cards are capped at 20 per session. <Keycap>⌘3</Keycap> restarts
+            <Keycap>⌘3</Keycap> restarts
           </div>
         </div>
       </div>
@@ -120,12 +128,10 @@ export function ReviewView(p: Props) {
           <span style={{ color: "var(--accent)" }}>R {segStats.review}</span>
           <span style={{ color: "var(--info)" }}>N {segStats.new}</span>
         </div>
-        <PomoButton pomo={p.pomo} onToggle={p.onPomoToggle} onSkip={p.onPomoSkip} onReset={p.onPomoReset} />
       </div>
 
       {/* card stage */}
       <div className="flip-wrap" {...drag.bind}>
-        <GesturePad air={p.airGestures} shown={p.shown} onGrade={(g) => p.onGrade(g)} />
         {p.stale && (
           <div
             className="stale-banner"
@@ -197,7 +203,7 @@ export function ReviewView(p: Props) {
             </div>
           </div>
         </div>
-        {p.airGestures && <HandOverlay shown={p.shown} onFlip={p.onFlip} onGrade={(g) => p.onGrade(g)} />}
+        <GesturePad shown={p.shown} onGrade={(g) => p.onGrade(g)} />
       </div>
 
       {/* grading bar */}
@@ -260,12 +266,12 @@ const PAD_CELLS: { dir: DragDir; grade: number; label: string; cls: string; area
   { dir: "down", grade: 2, label: "HARD", cls: "hard", area: "3 / 2" },
 ];
 
-function GesturePad({ air, shown, onGrade }: { air: boolean; shown: boolean; onGrade: (g: Grade) => void }) {
+function GesturePad({ shown, onGrade }: { shown: boolean; onGrade: (g: Grade) => void }) {
   return (
     <div className="gesture-pad" role="group" aria-label="Gesture map. Swipe or drag the card in a direction to grade. Tap to flip">
       <div className="gp-grid">
         <div className="gp-center">
-          <span>{air ? "pinch" : "tap"}</span>
+          <span>tap</span>
           <span className="gp-sub">flip</span>
         </div>
         {PAD_CELLS.map((c) => (
@@ -303,21 +309,6 @@ function SwipeBadges({ dir, phase }: { dir: DragDir | null; phase: "dragging" | 
         </div>
       ))}
     </>
-  );
-}
-
-function PomoButton({ pomo, onToggle, onSkip, onReset }: { pomo: Pomo; onToggle: () => void; onSkip: () => void; onReset: () => void }) {
-  const mm = String(Math.floor(pomo.seconds / 60)).padStart(2, "0");
-  const ss = String(pomo.seconds % 60).padStart(2, "0");
-  return (
-    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-      <button className={`pomo mono ${pomo.running ? "running" : ""}`} onClick={onToggle} title={pomo.running ? "Pause timer" : "Start timer"}>
-        {pomo.mode === "focus" ? <Icon name="clock" size={12} /> : <Icon name="check" size={12} />}
-        {mm}:{ss}
-      </button>
-      <button className="btn-ghost btn-sm" style={{ height: 24, padding: "0 6px", fontSize: 10 }} onClick={onSkip} title="Skip phase">⏭</button>
-      <button className="btn-ghost btn-sm" style={{ height: 24, padding: "0 6px", fontSize: 10 }} onClick={onReset} title="Reset timer">↺</button>
-    </div>
   );
 }
 

@@ -14,12 +14,9 @@
     "tauri:build": "tauri build",
     "tauri:build:debug": "tauri build --debug",
     "tauri:build:install": "tauri build --debug && ./scripts/install-to-applications.sh",
-    "tauri:build:release": "tauri build",
-    "widget:build": "./scripts/build-widget.sh",
-    "widget:install": "./scripts/build-widget.sh && killall Dock"
+    "tauri:build:release": "tauri build"
   },
   "dependencies": {
-    "@mediapipe/tasks-vision": "^1.0.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-dialog": "^2.7.2",

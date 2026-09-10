@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heatGrid, localDateKey, queueBuckets, scopeCards, smartFilterCards, streakLength } from "./derive";
+import { heatGrid, lapseMap, localDateKey, queueBuckets, scopeCards, smartFilterCards, smartFilterCount, streakLength } from "./derive";
 import { nextState } from "./fsrs";
 import type { CardWithState, ReviewRow } from "./types";
 
@@ -49,6 +49,33 @@ describe("derive", () => {
     const stale = card({ stability: 1, updated_at: new Date(Date.now() - 10 * 86_400_000).toISOString() });
     const strong = card({ stability: 1000 });
     expect(smartFilterCards([stale, strong], "stuck", new Map())).toEqual([stale]);
+  });
+
+  it("detects leeches from repeated lapses", () => {
+    const a = card();
+    const b = card();
+    const reviews = [
+      ...Array.from({ length: 6 }, () => ({ id: 0, card_id: a.id, grade: 1, created_at: new Date().toISOString() })),
+      ...Array.from({ length: 2 }, () => ({ id: 0, card_id: b.id, grade: 1, created_at: new Date().toISOString() })),
+    ];
+    const lapses = lapseMap(reviews);
+    expect(smartFilterCards([a, b], "leeches", new Map(), lapses)).toEqual([a]);
+    expect(smartFilterCount([a, b], "leeches", new Map(), lapses)).toBe(1);
+  });
+
+  it("applies daily limits to due and new when scoping", () => {
+    const dueCards = [card(), card(), card()];
+    const newCards = [card({ state: "new" }), card({ state: "new" })];
+    const queue = scopeCards([...dueCards, ...newCards], { kind: "all" }, new Map(), { newLimit: 1, reviewLimit: 2 });
+    expect(queue.filter((c) => c.state === "review")).toHaveLength(2);
+    expect(queue.filter((c) => c.state === "new")).toHaveLength(1);
+  });
+
+  it("can scope an explicit card list", () => {
+    const a = card();
+    const b = card();
+    const queue = scopeCards([a, b], { kind: "cards", ids: [b.id] }, new Map());
+    expect(queue.map((c) => c.id)).toEqual([b.id]);
   });
 
   it("uses local calendar days for heatmap and streaks", () => {

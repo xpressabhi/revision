@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SHORTCUTS } from "../lib/hotkeys";
 import { STALE_OPTIONS } from "../lib/session";
 import { Icon } from "./ui";
@@ -12,18 +12,22 @@ type Props = {
   onDensity: (d: "relaxed" | "standard" | "compact") => void;
   desiredRetention: number;
   onRetention: (r: number) => void;
+  newPerDay: number;
+  onNewPerDay: (n: number) => void;
+  reviewsPerDay: number;
+  onReviewsPerDay: (n: number) => void;
   autostart: boolean | null;
   onAutostart: (v: boolean) => void;
   isTauri: boolean;
-  onToggleWidget: () => void;
-  onLoadDemo: () => Promise<void>;
-  onClearAll: () => Promise<void>;
-  onDedupe: () => Promise<void>;
-  onImportBookmarks: () => Promise<void>;
-  onImportArticle: (url: string) => Promise<void>;
-  chromeAvailable: boolean | null;
-  airGestures: boolean;
-  onAirGestures: (v: boolean) => void;
+  autoBackupAt: string | null;
+  onExportBackup: () => void;
+  onImportBackupFile: (file: File) => void;
+  onRestoreAutoBackup: () => void;
+  onImportAnki: () => void;
+  onLoadDemo: () => void;
+  onClearAll: () => void;
+  onDedupe: () => void;
+  onExportCsv: () => void;
   staleMin: number;
   onStaleMin: (v: number) => void;
   autoEndOn: boolean;
@@ -40,23 +44,8 @@ const THEMES: { id: ThemeId; name: string; sub: string; swatches: string[]; fg: 
 ];
 
 export function SettingsView(p: Props) {
-  const [articleUrl, setArticleUrl] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [cloudOk, setCloudOk] = useState(() => localStorage.getItem("revision_cloud_ok") === "1");
-  const [zenModel, setZenModel] = useState(() => localStorage.getItem("revision_zen_model") ?? "");
-  const [zenEndpoint, setZenEndpoint] = useState(() => localStorage.getItem("revision_zen_endpoint") ?? "");
-  const [zenKey, setZenKey] = useState(() => localStorage.getItem("revision_zen_key") ?? "");
-  const [firecrawlKey, setFirecrawlKey] = useState(() => localStorage.getItem("revision_firecrawl_key") ?? "");
-
-  const saveLs = (key: string, value: string) => {
-    try {
-      localStorage.setItem(key, value);
-    } catch {}
-  };
-  const setCloud = (v: boolean) => {
-    setCloudOk(v);
-    saveLs("revision_cloud_ok", v ? "1" : "0");
-  };
+  const backupRef = useRef<HTMLInputElement>(null);
 
   const run = async (id: string, fn: () => Promise<void>) => {
     setBusy(id);
@@ -69,14 +58,14 @@ export function SettingsView(p: Props) {
     }
   };
 
-  const fieldStyle: React.CSSProperties = { flex: 1, background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 8, padding: "6px 8px", fontSize: 11.5 };
+  const numStyle: React.CSSProperties = { width: 70, background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 8, padding: "6px 8px", fontSize: 12, textAlign: "right" };
 
   return (
     <div className="canvas-inner">
       <div className="page-head">
         <div className="page-title">
           <Icon name="settings" size={18} /> Settings
-          <span className="sub">appearance, scheduler, content</span>
+          <span className="sub">appearance, scheduler, data, activity</span>
         </div>
       </div>
 
@@ -110,57 +99,52 @@ export function SettingsView(p: Props) {
           <h3>FSRS Scheduler</h3>
           <p>Free Spaced Repetition Scheduler. R(t) uses FSRS-5 weights. Lower target retention means longer intervals and lighter load.</p>
           <div className="set-row">
-            <span className="muted">Desired retention <span className="mono">{p.desiredRetention * 100}%</span></span>
+            <span className="muted">Desired retention <span className="mono">{Math.round(p.desiredRetention * 100)}%</span></span>
             <input type="range" min={0.8} max={0.95} step={0.01} value={p.desiredRetention} onChange={(e) => p.onRetention(Number(e.target.value))} style={{ width: 160 }} />
           </div>
-          <p style={{ fontSize: 11 }}>Grade keys: <b>1</b> Again (10m step), <b>2</b> Hard, <b>3</b> Good, <b>4</b> Easy. Predictions shown live on the grading bar.</p>
+          <div className="set-row">
+            <span className="muted">New cards per day</span>
+            <input type="number" min={0} max={999} value={p.newPerDay} onChange={(e) => p.onNewPerDay(Math.max(0, Math.min(999, Number(e.target.value) || 0)))} style={numStyle} />
+          </div>
+          <div className="set-row">
+            <span className="muted">Reviews per day</span>
+            <input type="number" min={0} max={9999} value={p.reviewsPerDay} onChange={(e) => p.onReviewsPerDay(Math.max(0, Math.min(9999, Number(e.target.value) || 0)))} style={numStyle} />
+          </div>
+          <p style={{ fontSize: 11 }}>Limits apply to Study all and deck scopes. Smart filters (Due, Leeches…) always show everything. Grade keys: <b>1</b> Again, <b>2</b> Hard, <b>3</b> Good, <b>4</b> Easy.</p>
         </div>
 
         <div className="set-card">
-          <h3>Content</h3>
+          <h3>Data</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button className="btn" onClick={() => run("demo", p.onLoadDemo)} disabled={busy !== null}>
-              <Icon name="sparkles" size={13} /> {busy === "demo" ? "Loading…" : "Load demo content"}
+            <button className="btn" onClick={() => run("backup", async () => p.onExportBackup())} disabled={busy !== null}>
+              <Icon name="download" size={13} /> {busy === "backup" ? "Exporting…" : "Export backup (JSON, full state)"}
             </button>
-            <p style={{ fontSize: 11 }}>Adds 37 cards across Spanish, Biology, DSA and System Design, plus about 90 days of review history for the heatmap. Deterministic, safe to re-run.</p>
-            <button className="btn" onClick={() => run("bookmarks", p.onImportBookmarks)} disabled={busy !== null || p.chromeAvailable === false}>
-              <Icon name="book" size={13} /> {busy === "bookmarks" ? "Importing…" : "Import Chrome bookmarks"}{p.chromeAvailable === false ? " (Chrome not detected)" : ""}
+            <button className="btn" onClick={() => backupRef.current?.click()} disabled={busy !== null}>
+              <Icon name="upload" size={13} /> Import backup
             </button>
-          </div>
-        </div>
-
-        <div className="set-card">
-          <h3>Article import (Zen, opt-in)</h3>
-          <p>Fetch a URL and generate a flashcard. Fetching is direct; <b>cloud extraction</b> sends the extracted text to opencode Zen free models and allows CORS proxies / Firecrawl fallbacks. Off = local heuristic only.</p>
-          <div className="set-row">
-            <span className="muted">Allow cloud extraction</span>
-            <button className={`btn btn-sm ${cloudOk ? "btn-primary" : ""}`} onClick={() => setCloud(!cloudOk)}>{cloudOk ? "On" : "Off"}</button>
-          </div>
-          <div className="set-row">
-            <span className="muted">Zen model</span>
-            <input style={fieldStyle} value={zenModel} onChange={(e) => { setZenModel(e.target.value); saveLs("revision_zen_model", e.target.value); }} placeholder="nemotron-3.5-lightning-free" />
-          </div>
-          <div className="set-row">
-            <span className="muted">Zen endpoint (optional)</span>
-            <input style={fieldStyle} value={zenEndpoint} onChange={(e) => { setZenEndpoint(e.target.value); saveLs("revision_zen_endpoint", e.target.value); }} placeholder="http://localhost:4096/v1/chat/completions" />
-          </div>
-          <div className="set-row">
-            <span className="muted">Zen API key (optional)</span>
-            <input type="password" style={fieldStyle} value={zenKey} onChange={(e) => { setZenKey(e.target.value); saveLs("revision_zen_key", e.target.value); }} placeholder="sk-…" />
-          </div>
-          <div className="set-row">
-            <span className="muted">Firecrawl key (optional)</span>
-            <input type="password" style={fieldStyle} value={firecrawlKey} onChange={(e) => { setFirecrawlKey(e.target.value); saveLs("revision_firecrawl_key", e.target.value); }} placeholder="fc-…" />
-          </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <input
-              value={articleUrl}
-              onChange={(e) => setArticleUrl(e.target.value)}
-              placeholder="https://…"
-              style={{ flex: 1, background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 8, padding: "8px 10px", fontSize: 12 }}
+              ref={backupRef}
+              type="file"
+              accept=".json,application/json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void run("restore", async () => p.onImportBackupFile(f));
+                e.target.value = "";
+              }}
             />
-            <button className="btn btn-primary" disabled={!articleUrl || busy !== null} onClick={() => run("article", async () => { await p.onImportArticle(articleUrl); setArticleUrl(""); })}>
-              {busy === "article" ? "Fetching…" : "Fetch"}
+            <button className="btn" onClick={() => run("auto", async () => p.onRestoreAutoBackup())} disabled={busy !== null || !p.autoBackupAt}>
+              <Icon name="refresh" size={13} /> Restore auto-backup{p.autoBackupAt ? ` (${p.autoBackupAt.slice(0, 16).replace("T", " ")})` : ""}
+            </button>
+            <p style={{ fontSize: 11 }}>A snapshot is saved automatically before clear, dedupe and restore. Backups include scheduling state; CSV does not.</p>
+            <button className="btn" onClick={() => run("anki", async () => p.onImportAnki())} disabled={busy !== null || !p.isTauri}>
+              <Icon name="layers" size={13} /> {busy === "anki" ? "Importing…" : "Import Anki deck (.apkg)"}{p.isTauri ? "" : " (desktop only)"}
+            </button>
+            <button className="btn" onClick={() => run("csv", async () => p.onExportCsv())} disabled={busy !== null}>
+              <Icon name="download" size={13} /> Export CSV
+            </button>
+            <button className="btn" onClick={() => run("demo", async () => p.onLoadDemo())} disabled={busy !== null}>
+              <Icon name="sparkles" size={13} /> {busy === "demo" ? "Loading…" : "Load demo content"}
             </button>
           </div>
         </div>
@@ -174,21 +158,10 @@ export function SettingsView(p: Props) {
             </button>
           </div>
           <div className="set-row">
-            <span className="muted">Floating widget window (tray also toggles it)</span>
-            <button className="btn btn-sm" onClick={p.onToggleWidget}>Toggle widget</button>
+            <span className="muted">Global quick capture <span className="mono">⌥⇧K</span></span>
+            <span className="chip">{p.isTauri ? "registered" : "desktop app only"}</span>
           </div>
-          <p style={{ fontSize: 11 }}>Quick capture: <b>⌘⇧K</b> anywhere in the app. The macOS menu-bar widget shows Due/New/Total and can be added from Desktop → Edit Widgets.</p>
-        </div>
-
-        <div className="set-card">
-          <h3>Gestures</h3>
-          <div className="set-row">
-            <span className="muted">Air gestures (camera)</span>
-            <button className={`btn btn-sm ${p.airGestures ? "btn-primary" : ""}`} onClick={() => p.onAirGestures(!p.airGestures)}>
-              {p.airGestures ? "On" : "Off"}
-            </button>
-          </div>
-          <p style={{ fontSize: 11 }}>Hand tracking runs locally on your webcam. Nothing is uploaded. Raise your hand to flip with pinch and grade with air-swipes (left Again, right Good, up Easy, down Hard). macOS asks for camera access once. On desktop you can also drag the card directly or click to flip.</p>
+          <p style={{ fontSize: 11 }}>The tray shows Due/New and can start a review. In-app: <b>⌘⇧K</b>.</p>
         </div>
 
         <div className="set-card">
@@ -214,10 +187,10 @@ export function SettingsView(p: Props) {
         <div className="set-card">
           <h3>Danger zone</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button className="btn btn-danger btn-sm" onClick={() => run("dedupe", p.onDedupe)} disabled={busy !== null}>
+            <button className="btn btn-danger btn-sm" onClick={() => run("dedupe", async () => p.onDedupe())} disabled={busy !== null}>
               <Icon name="refresh" size={12} /> Deduplicate cards (front text), {p.cardCount} cards
             </button>
-            <button className="btn btn-danger btn-sm" onClick={() => { if (confirm(`Delete ALL ${p.cardCount} cards and ${p.reviewCount} reviews? This cannot be undone.`)) void run("clear", p.onClearAll); }} disabled={busy !== null}>
+            <button className="btn btn-danger btn-sm" onClick={() => { if (confirm(`Delete ALL ${p.cardCount} cards and ${p.reviewCount} reviews? An auto-backup is taken first.`)) void run("clear", async () => p.onClearAll()); }} disabled={busy !== null}>
               <Icon name="trash" size={12} /> Clear all data
             </button>
           </div>

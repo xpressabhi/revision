@@ -5,16 +5,31 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 ## [Unreleased]
 
 ### Added
-- **Vitest suite** for the pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `handGestures` (`npm test`), and the release workflow now runs it before building.
-- **Opt-in cloud extraction** for article import (Settings → Article import): model/endpoint/key fields, Firecrawl key, and a consent toggle. With it off, only a direct fetch + local heuristic runs.
+- **Vitest suite** for the pure libs: `fsrs`, `derive`, `csv`, `markdown`, `session`, `backup` (`npm test`), and the release workflow now runs it before building.
+- **Daily limits**: new-cards/day (default 20) and reviews/day (default 200) in Settings → FSRS Scheduler; budgets are respected by Study all and deck scopes.
+- **Session summary**: cards, accuracy, lapses and time when a queue completes, with a one-click **Review lapses** queue.
+- **Leech detection**: cards lapsed 6+ times get a dedicated sidebar/⌘K queue and an inspector flag.
+- **Card history & lapse count** in the inspector (last 10 grades).
+- **Backups**: JSON export/import with full scheduling state, plus automatic snapshots before clear/dedupe/restore and a Restore auto-backup button.
+- **Unified Import sheet**: CSV, Chrome bookmarks HTML/JSON, paste-text (`Front :: Back`), and **Anki `.apkg`** import (desktop; decks become tag trees, intervals approximated).
+- **Browse bulk mode**: multi-select with bulk suspend, reset scheduling and delete.
+- **Images on cards**: paste an image into the editor (max 1.5 MB) and it renders inline.
+- **Exam planner** on the dashboard: target date vs remaining new cards, with the required daily pace.
+- **Global quick capture** `⌥⇧K` while the desktop app is running.
+- **30-day pass rate** KPI in Analytics.
+
+### Removed
+- Camera **air gestures** and the bundled MediaPipe assets (~41 MB) — pointer drag and keyboard remain.
+- **In-app widget window** and the macOS **WidgetKit widget** (the tray is the single desktop surface).
+- **Pomodoro timer**, inspector **AI hints**, the inspector **scenario chart**, the sidebar **tag graph**, editor **template tabs**, the heuristic **AI card generator**, and the **cloud article import** (Zen/proxies/Firecrawl) — replaced by the file/paste/Anki import sheet.
+- Direct Chrome bookmark file reads (permission-prone) and the unused Blind 75 CSV.
 
 ### Fixed
 - **Data safety**: removed the silent SQLite→localStorage per-call fallback in `db.ts` (failures now surface instead of splitting data across stores), wrapped migrations/clear in transactions, and removed `@ts-nocheck`.
 - **Review flow**: burying no longer desyncs the queue index; rapid key repeats can no longer double-grade a card and skip the next one; due learning cards no longer appear twice in one queue; undo restores the DB review row and session stats.
 - **Security**: markdown link/cloze attributes are quote-escaped and a strict CSP is set (was `null`), closing an injection path from imported cards into Tauri IPC.
 - **Seeding**: `Clear all data` is now durable (no re-seed on next launch); demo content is idempotent and no longer duplicates cards/reviews.
-- **Editor**: advertised shortcuts now work (⌘↵ save, ⌃M/⌃⇧M math, ⌃⇧C cloze, ⌃⇧D generator, ⌃F preview) and math/cloze buttons target the active tab.
-- **Bookmarks**: import failures show a toast and fall back to the file picker instead of failing silently.
+- **Editor**: advertised shortcuts now work (⌘↵ save, ⌃M/⌃⇧M math, ⌃⇧C cloze, ⌃F preview) and math/cloze buttons target the active tab.
 - **Dates/analytics**: heatmap, streak and per-day charts use local calendar days; queue-bucket labels match their ranges.
 - **Quick capture**: clipboard paste is now an explicit button instead of an automatic read.
 - CSV parser handles quoted multi-line fields and maps headerless files as `front,back,tags`.

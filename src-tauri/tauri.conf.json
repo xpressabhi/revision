@@ -21,26 +21,10 @@
         "titleBarStyle": "Overlay",
         "backgroundColor": "#0e0e12",
         "shadow": true
-      },
-      {
-        "label": "widget",
-        "title": "Revision — Today",
-        "url": "index.html?widget=1",
-        "width": 340,
-        "height": 190,
-        "minWidth": 300,
-        "minHeight": 150,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "visible": false,
-        "skipTaskbar": true,
-        "resizable": true,
-        "shadow": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost tauri: https: http://localhost:4096; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost tauri: https: http://localhost:4096; object-src 'none'; base-uri 'self'; form-action 'none'",
       "devCsp": null
     }
   },

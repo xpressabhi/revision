@@ -1,7 +1,7 @@
 // Simple in-memory/localStorage fallback for browser preview (npm run dev without Tauri)
 // Mirrors the SQLite schema but uses JSON in localStorage
 
-import type { CardState, CardWithState, Deck, DeckStats } from "./types";
+import type { BackupFile, CardState, CardWithState, Deck, DeckStats, ImportCardRow } from "./types";
 import { DEFAULT_EASE, DEFAULT_STABILITY, DEFAULT_DIFFICULTY } from "./fsrs";
 
 const LS_DECKS = "revision_decks";
@@ -171,26 +171,6 @@ export async function browserGetDecks(): Promise<Deck[]> {
   return load<Deck[]>(LS_DECKS, []);
 }
 
-export async function browserCreateDeck(name: string) {
-  const decks = load<Deck[]>(LS_DECKS, []);
-  const id = nextId("decks");
-  decks.push({ id, name: name.trim(), created_at: nowIso() });
-  save(LS_DECKS, decks);
-}
-
-export async function browserDeleteDeck(id: number) {
-  let decks = load<Deck[]>(LS_DECKS, []);
-  let cards = load<any[]>(LS_CARDS, []);
-  let states = load<CardState[]>(LS_STATES, []);
-  decks = decks.filter((d) => d.id !== id);
-  const cardIds = new Set(cards.filter((c) => c.deck_id === id).map((c) => c.id));
-  cards = cards.filter((c) => c.deck_id !== id);
-  states = states.filter((s) => !cardIds.has(s.card_id));
-  save(LS_DECKS, decks);
-  save(LS_CARDS, cards);
-  save(LS_STATES, states);
-}
-
 export async function browserCreateCard(deckId: number, front: string, back: string, tags: string): Promise<number> {
   const cards = load<any[]>(LS_CARDS, []);
   const states = load<CardState[]>(LS_STATES, []);
@@ -243,14 +223,6 @@ export async function browserGetAllCardsWithState(opts?: { deckId?: number | nul
   }
   rows.sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
   return rows;
-}
-
-export async function browserGetDueCards(limitNew = 20): Promise<CardWithState[]> {
-  const all = await browserGetAllCardsWithState();
-  const now = new Date();
-  const due = all.filter((c) => c.state !== "new" && new Date(c.due_at).getTime() <= now.getTime()).slice(0, 200);
-  const fresh = all.filter((c) => c.state === "new").slice(0, limitNew);
-  return [...due, ...fresh];
 }
 
 export async function browserGetDeckStats(): Promise<DeckStats[]> {
@@ -329,6 +301,64 @@ export async function browserBulkCreateCards(rows: { deckName: string; front: st
     created++;
   }
   return created;
+}
+
+export async function browserImportCards(deckId: number, rows: ImportCardRow[]): Promise<number> {
+  const cards = load<any[]>(LS_CARDS, []);
+  const states = load<CardState[]>(LS_STATES, []);
+  const now = nowIso();
+  let created = 0;
+  for (const r of rows) {
+    const id = nextId("cards");
+    cards.push({ id, deck_id: deckId, front: r.front.trim(), back: r.back.trim(), tags: r.tags.trim(), created_at: now, updated_at: now });
+    states.push({
+      card_id: id,
+      due_at: r.due_at,
+      interval: r.interval,
+      ease: DEFAULT_EASE,
+      reps: r.reps,
+      state: r.state,
+      stability: r.stability,
+      difficulty: r.difficulty,
+      updated_at: now,
+    });
+    created++;
+  }
+  save(LS_CARDS, cards);
+  save(LS_STATES, states);
+  return created;
+}
+
+export async function browserRestoreBackup(backup: Pick<BackupFile, "cards" | "reviews">) {
+  const cards = backup.cards.map((c) => ({
+    id: c.id,
+    deck_id: c.deck_id,
+    front: c.front,
+    back: c.back,
+    tags: c.tags,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+  }));
+  const states: CardState[] = backup.cards.map((c) => ({
+    card_id: c.id,
+    due_at: c.due_at,
+    interval: c.interval,
+    ease: c.ease,
+    reps: c.reps,
+    state: c.state,
+    stability: c.stability,
+    difficulty: c.difficulty,
+    updated_at: c.updated_at,
+  }));
+  save(LS_CARDS, cards);
+  save(LS_STATES, states);
+  save(LS_REVIEWS, backup.reviews);
+  const seq = load<Record<string, number>>(LS_SEQ, {});
+  save(LS_SEQ, {
+    ...seq,
+    cards: Math.max(0, ...cards.map((c) => c.id)),
+    reviews: Math.max(0, ...backup.reviews.map((r) => r.id)),
+  });
 }
 
 export async function browserClearAllCards() {

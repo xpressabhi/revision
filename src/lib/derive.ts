@@ -60,9 +60,25 @@ export function buildTagTree(cards: CardWithState[], lastReview: Map<number, str
   return nodes.sort((a, b) => b.total - a.total);
 }
 
-export type SmartFilterId = "due" | "new" | "learning" | "stuck";
+export type SmartFilterId = "due" | "new" | "learning" | "stuck" | "leeches";
 
-export function smartFilterCards(cards: CardWithState[], id: SmartFilterId, lastReview: Map<number, string>): CardWithState[] {
+export const LEECH_THRESHOLD = 6;
+
+/** Grade-1 lapses per card, used for leech detection. */
+export function lapseMap(reviews: { card_id: number; grade: number }[]): Map<number, number> {
+  const m = new Map<number, number>();
+  for (const r of reviews) {
+    if (r.grade === 1) m.set(r.card_id, (m.get(r.card_id) ?? 0) + 1);
+  }
+  return m;
+}
+
+export function smartFilterCards(
+  cards: CardWithState[],
+  id: SmartFilterId,
+  lastReview: Map<number, string>,
+  lapses: Map<number, number> = new Map()
+): CardWithState[] {
   const now = Date.now();
   return cards.filter((c) => {
     if (c.tags.includes("suspended")) return false;
@@ -78,28 +94,48 @@ export function smartFilterCards(cards: CardWithState[], id: SmartFilterId, last
         const r = cardRetrievability(c, lastReview.get(c.id));
         return r !== null && r < 0.8;
       }
+      case "leeches":
+        return c.state !== "new" && (lapses.get(c.id) ?? 0) >= LEECH_THRESHOLD;
     }
   });
 }
 
-export function smartFilterCount(cards: CardWithState[], id: SmartFilterId, lastReview: Map<number, string>): number {
-  return smartFilterCards(cards, id, lastReview).length;
+export function smartFilterCount(
+  cards: CardWithState[],
+  id: SmartFilterId,
+  lastReview: Map<number, string>,
+  lapses: Map<number, number> = new Map()
+): number {
+  return smartFilterCards(cards, id, lastReview, lapses).length;
 }
 
-export type StudyScope = { kind: "all" } | { kind: "group"; group: string } | { kind: "smart"; id: SmartFilterId };
+export type StudyScope = { kind: "all" } | { kind: "group"; group: string } | { kind: "smart"; id: SmartFilterId } | { kind: "cards"; ids: number[] };
 
-export function scopeCards(cards: CardWithState[], scope: StudyScope, lastReview: Map<number, string>): CardWithState[] {
+export type StudyLimits = { newLimit?: number; reviewLimit?: number };
+
+export function scopeCards(
+  cards: CardWithState[],
+  scope: StudyScope,
+  lastReview: Map<number, string>,
+  limits: StudyLimits = {},
+  lapses: Map<number, number> = new Map()
+): CardWithState[] {
   let pool = cards.filter((c) => !c.tags.includes("suspended"));
   if (scope.kind === "group") {
     const g = scope.group;
     pool = pool.filter((c) => c.tags.split(",").some((t) => t.trim().toLowerCase().startsWith(g.toLowerCase())));
   } else if (scope.kind === "smart") {
-    pool = smartFilterCards(pool, scope.id, lastReview);
+    pool = smartFilterCards(pool, scope.id, lastReview, lapses);
+  } else if (scope.kind === "cards") {
+    const ids = new Set(scope.ids);
+    pool = pool.filter((c) => ids.has(c.id));
   }
   const now = Date.now();
   const learning = pool.filter((c) => c.state === "learning").sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
-  const due = pool.filter((c) => c.state === "review" && new Date(c.due_at).getTime() <= now).sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
-  const fresh = pool.filter((c) => c.state === "new").sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).slice(0, 20);
+  let due = pool.filter((c) => c.state === "review" && new Date(c.due_at).getTime() <= now).sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
+  if (limits.reviewLimit !== undefined) due = due.slice(0, Math.max(0, limits.reviewLimit));
+  let fresh = pool.filter((c) => c.state === "new").sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  fresh = fresh.slice(0, Math.max(0, limits.newLimit ?? 20));
   return [...learning, ...due, ...fresh];
 }
 

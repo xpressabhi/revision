@@ -33,6 +33,12 @@ export function AnalyticsView({ cards, reviews, groups, lastReview }: Props) {
     const lastPts = pts.slice(-15);
     return lastPts.length ? lastPts.reduce((a, b) => a + (b.r ?? 0), 0) / lastPts.length : null;
   }, [forecast]);
+  const passRate30 = useMemo(() => {
+    const cutoff = Date.now() - 30 * 86_400_000;
+    const recent = reviews.filter((r) => new Date(r.created_at).getTime() >= cutoff);
+    if (recent.length === 0) return null;
+    return recent.filter((r) => r.grade >= 2).length / recent.length;
+  }, [reviews]);
 
   return (
     <div className="canvas-inner">
@@ -49,6 +55,7 @@ export function AnalyticsView({ cards, reviews, groups, lastReview }: Props) {
         <div className="kpi"><span className="k" style={{ color: "var(--warning)" }}>{loadToday}</span><span className="l">due today</span></div>
         <div className="kpi"><span className="k">{rAvg !== null ? `${Math.round(rAvg * 100)}%` : "-"}</span><span className="l">avg R(t) now</span></div>
         <div className="kpi"><span className="k" style={{ color: "var(--accent)" }}>{avgR90 !== null ? `${Math.round(avgR90 * 100)}%` : "-"}</span><span className="l">projected R (90d)</span></div>
+        <div className="kpi"><span className="k">{passRate30 !== null ? `${Math.round(passRate30 * 100)}%` : "-"}</span><span className="l">pass rate (30d)</span></div>
       </div>
 
       <div className="chart-grid">

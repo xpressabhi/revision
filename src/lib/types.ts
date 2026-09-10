@@ -54,4 +54,23 @@ export type DeckStats = {
 
 export type ReviewRow = { id: number; card_id: number; grade: number; created_at: string };
 
+export type BackupFile = {
+  version: 1;
+  exported_at: string;
+  cards: CardWithState[];
+  reviews: ReviewRow[];
+};
+
+export type ImportCardRow = {
+  front: string;
+  back: string;
+  tags: string;
+  state: CardState["state"];
+  due_at: string;
+  interval: number;
+  stability: number;
+  difficulty: number;
+  reps: number;
+};
+
 export type View = "dashboard" | "browse" | "review" | "analytics" | "settings";

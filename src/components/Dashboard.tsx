@@ -9,13 +9,14 @@ type Props = {
   groups: TagNode[];
   lastReview: Map<number, string>;
   desiredRetention: number;
+  newPerDay: number;
   onStudyGroup: (group: string) => void;
   onStudyAll: () => void;
   onBrowseGroup: (group: string) => void;
   onNewCard: () => void;
 };
 
-export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention, onStudyGroup, onStudyAll, onBrowseGroup, onNewCard }: Props) {
+export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention, newPerDay, onStudyGroup, onStudyAll, onBrowseGroup, onNewCard }: Props) {
   const streak = useMemo(() => streakLength(reviews), [reviews]);
   const grid = useMemo(() => heatGrid(reviews), [reviews]);
   const forecast = useMemo(() => retentionForecast(cards, lastReview), [cards, lastReview]);
@@ -73,6 +74,8 @@ export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention
           <QueueChart buckets={buckets} />
         </div>
       </div>
+
+      <ExamPlan remainingNew={cards.filter((c) => c.state === "new" && !c.tags.includes("suspended")).length} newPerDay={newPerDay} />
 
       <div>
         <div className="page-head" style={{ marginBottom: 12 }}>
@@ -180,6 +183,39 @@ function QueueChart({ buckets }: { buckets: { label: string; count: number; days
           <span className="val">{b.count}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ExamPlan({ remainingNew, newPerDay }: { remainingNew: number; newPerDay: number }) {
+  const [date, setDate] = useState(() => localStorage.getItem("recall_exam_date") ?? "");
+  const daysLeft = date ? Math.max(0, Math.ceil((new Date(`${date}T23:59:59`).getTime() - Date.now()) / 86_400_000)) : null;
+  const needed = daysLeft && daysLeft > 0 ? Math.ceil(remainingNew / daysLeft) : remainingNew;
+  const feasible = needed <= newPerDay;
+  return (
+    <div className="chart-card exam-plan">
+      <div>
+        <div style={{ fontWeight: 600, fontSize: 13 }}>Exam plan</div>
+        <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+          {remainingNew} new cards left. {daysLeft === null ? "Set a target date to see the daily pace." : daysLeft === 0 ? "Target date is today." : `${daysLeft} days left.`}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => {
+            setDate(e.target.value);
+            localStorage.setItem("recall_exam_date", e.target.value);
+          }}
+          style={{ background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 8, padding: "6px 8px", fontSize: 12, color: "var(--text-1)" }}
+        />
+        {date && (
+          <span className="chip" style={{ color: feasible ? "var(--accent)" : "var(--danger)" }}>
+            {feasible ? `${needed}/day fits your ${newPerDay} limit` : `${needed}/day needed, limit is ${newPerDay}`}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

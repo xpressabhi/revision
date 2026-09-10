@@ -1,33 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CardWithState } from "../lib/types";
 import { MarkdownView } from "../lib/markdown";
-import { generateVariants, type GeneratedVariant } from "../lib/ai";
 import { matchesChord } from "../lib/hotkeys";
 import { Icon } from "./ui";
 
 type Props = {
   card: CardWithState | null;
-  deckId: number;
-  presetFront?: string;
-  presetBack?: string;
-  presetTags?: string;
   onSave: (front: string, back: string, tags: string) => Promise<void>;
   onClose: () => void;
 };
 
-export function EditorModal({ card, deckId, presetFront, presetBack, presetTags, onSave, onClose }: Props) {
-  const [front, setFront] = useState(presetFront ?? card?.front ?? "");
-  const [back, setBack] = useState(presetBack ?? card?.back ?? "");
-  const [tags, setTags] = useState<string[]>(() => (presetTags ?? card?.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean));
+const MAX_IMAGE_BYTES = 1_500_000;
+
+export function EditorModal({ card, onSave, onClose }: Props) {
+  const [front, setFront] = useState(card?.front ?? "");
+  const [back, setBack] = useState(card?.back ?? "");
+  const [tags, setTags] = useState<string[]>(() => (card?.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean));
   const [tagInput, setTagInput] = useState("");
   const [tab, setTab] = useState<"front" | "back">("front");
-  const [template, setTemplate] = useState<"qa" | "cloze" | "multi">("qa");
-  const [aiOpen, setAiOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [source, setSource] = useState("");
-  const [genMode, setGenMode] = useState<"qa" | "cloze" | "cards">("qa");
-  const [difficulty, setDifficulty] = useState(3);
-  const [variants, setVariants] = useState<GeneratedVariant[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
   const frontRef = useRef<HTMLTextAreaElement>(null);
   const backRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -37,49 +29,62 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
   }, []);
 
   const clozeCount = useMemo(() => (front.match(/\{\{c\d+::/g) ?? []).length, [front]);
-  const selectedTags = tags;
   const activeRef = tab === "front" ? frontRef : backRef;
 
   const addTag = (t: string) => {
     const clean = t.trim().replace(/^#/, "");
     if (!clean) return;
-    if (!selectedTags.some((x) => x.toLowerCase() === clean.toLowerCase())) setTags((s) => [...s, clean]);
+    if (!tags.some((x) => x.toLowerCase() === clean.toLowerCase())) setTags((s) => [...s, clean]);
     setTagInput("");
   };
 
   const removeTag = (t: string) => setTags((s) => s.filter((x) => x !== t));
 
+  const insertAtCursor = (snippet: string, selectStart?: number, selectEnd?: number) => {
+    const el = activeRef.current;
+    if (!el) return;
+    const { selectionStart: a, selectionEnd: b, value } = el;
+    const next = value.slice(0, a) + snippet + value.slice(b);
+    if (tab === "front") setFront(next);
+    else setBack(next);
+    el.focus();
+    const s = selectStart ?? a + snippet.length;
+    const e = selectEnd ?? a + snippet.length;
+    window.setTimeout(() => el.setSelectionRange(s, e), 0);
+  };
+
   const wrapSelection = (pre: string, post: string) => {
     const el = activeRef.current;
     if (!el) return;
     const { selectionStart: a, selectionEnd: b, value } = el;
-    const next = value.slice(0, a) + pre + value.slice(a, b) + post + value.slice(b);
-    if (tab === "front") setFront(next);
-    else setBack(next);
+    const snippet = pre + value.slice(a, b) + post;
+    if (tab === "front") setFront(value.slice(0, a) + snippet + value.slice(b));
+    else setBack(value.slice(0, a) + snippet + value.slice(b));
     el.focus();
-    window.setTimeout(() => {
-      el.setSelectionRange(a + pre.length, b + pre.length);
-    }, 0);
+    window.setTimeout(() => el.setSelectionRange(a + pre.length, b + pre.length), 0);
   };
 
-  const wrapCloze = () => {
-    wrapSelection(`{{c${clozeCount + 1}::`, "}}");
-  };
+  const wrapCloze = () => wrapSelection(`{{c${clozeCount + 1}::`, "}}");
+  const insertMath = (display: boolean) => wrapSelection(display ? "$$\n" : "$", display ? "\n$$" : "$");
 
-  const insertMath = (display: boolean) => {
-    wrapSelection(display ? "$$\n" : "$", display ? "\n$$" : "$");
-  };
-
-  const generate = () => {
-    setVariants(generateVariants(source || back || front, genMode, difficulty, tags[0] ?? "generated"));
-  };
-
-  const acceptVariant = (v: GeneratedVariant) => {
-    setFront(v.front);
-    setBack(v.back);
-    if (v.tags && !tags.includes(v.tags)) setTags((s) => [...s, v.tags]);
-    setAiOpen(false);
-    setTab("back");
+  const onPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItem = Array.from(items).find((i) => i.type.startsWith("image/"));
+    if (!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageError("Image is larger than 1.5 MB. Resize it first.");
+      return;
+    }
+    setImageError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") insertAtCursor(`![image](${reader.result})`);
+    };
+    reader.readAsDataURL(file);
   };
 
   const save = async () => {
@@ -97,8 +102,7 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      if (aiOpen) setAiOpen(false);
-      else onClose();
+      onClose();
       return;
     }
     if (matchesChord(e.nativeEvent, "mod+enter")) {
@@ -125,12 +129,6 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
       wrapCloze();
       return;
     }
-    if (matchesChord(e.nativeEvent, "ctrl+shift+d")) {
-      e.preventDefault();
-      e.stopPropagation();
-      setAiOpen((v) => !v);
-      return;
-    }
     if (matchesChord(e.nativeEvent, "ctrl+f")) {
       e.preventDefault();
       e.stopPropagation();
@@ -143,12 +141,8 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
       <div className="modal" role="dialog" aria-modal="true" aria-label={card ? "Edit card" : "New card"}>
         <div className="modal-head">
           <span className="mh-title">{card ? "Edit card" : "New card"}</span>
-          <span className="chip mono" style={{ fontSize: 10 }}>#{deckId}</span>
           {clozeCount > 0 && <span className="chip cloze-chip" style={{ color: "var(--accent)" }}>cloze ×{clozeCount}</span>}
           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-            <button className="btn-ghost btn-sm" onClick={() => setAiOpen(true)} title="AI generator (⌃⇧D)">
-              <Icon name="sparkles" size={12} /> Generate
-            </button>
             <button className="btn-ghost btn-sm" onClick={onClose}>Cancel <span className="mono" style={{ fontSize: 9.5, opacity: 0.6 }}>esc</span></button>
             <button className="btn btn-sm btn-primary" onClick={save} disabled={saving || !front.trim()} title="Save (⌘↵)">
               <Icon name="check" size={12} /> {saving ? "Saving…" : "Save"}
@@ -157,18 +151,12 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
         </div>
 
         <div className="editor-tabs">
-          <button className={`seg ${template === "qa" ? "active" : ""}`} onClick={() => setTemplate("qa")}>Q&A</button>
-          <button className={`seg ${template === "cloze" ? "active" : ""}`} onClick={() => { setTemplate("cloze"); }}>Cloze</button>
-          <button className={`seg ${template === "multi" ? "active" : ""}`} onClick={() => setTemplate("multi")}>Multi-Basic</button>
-          <span style={{ fontSize: 10.5, color: "var(--text-4)", marginLeft: 6 }}>
-            {template === "cloze" ? "Wrap a selection with ⌃⇧C → {{c1::…}}" : template === "qa" ? "Question → Answer markdown" : "Two prompts, one answer set"}
-          </span>
+          <button className={`seg ${tab === "front" ? "active" : ""}`} onClick={() => setTab("front")}>Front</button>
+          <button className={`seg ${tab === "back" ? "active" : ""}`} onClick={() => setTab("back")}>Back</button>
           <span className="spacer" />
           <button className="seg" onClick={() => insertMath(false)} title="Inline math $…$ (⌃M)">Σ $x$</button>
           <button className="seg" onClick={() => insertMath(true)} title="Display math $$…$$ (⌃⇧M)">Σ $$x$$</button>
           <button className="seg" onClick={wrapCloze} title="Cloze wrap (⌃⇧C)">[[C]]</button>
-          <button className={`seg ${tab === "front" ? "active" : ""}`} onClick={() => setTab("front")}>Front</button>
-          <button className={`seg ${tab === "back" ? "active" : ""}`} onClick={() => setTab("back")}>Back</button>
         </div>
 
         <div className="modal-body">
@@ -178,8 +166,11 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
               className="editor-source"
               value={tab === "front" ? front : back}
               onChange={(e) => (tab === "front" ? setFront(e.target.value) : setBack(e.target.value))}
-              placeholder={tab === "front" ? "Question: markdown, $math$, {{c1::cloze}}…" : "Answer: markdown, $math$, links…"}
+              onPaste={(e) => void onPaste(e)}
+              title="Paste an image to attach it"
+              placeholder={tab === "front" ? "Question: markdown, $math$, {{c1::cloze}}, paste an image…" : "Answer: markdown, $math$, links…"}
             />
+            {imageError && <div className="editor-warn">{imageError}</div>}
             <div className="editor-meta">
               <div className="tag-input-wrap">
                 {tags.map((t) => (
@@ -216,45 +207,6 @@ export function EditorModal({ card, deckId, presetFront, presetBack, presetTags,
           </div>
         </div>
       </div>
-
-      {aiOpen && (
-        <div className="drawer" style={{ position: "fixed", top: 0, right: 0, bottom: 0 }}>
-          <div className="drawer-head">
-            <Icon name="sparkles" size={14} />
-            <span style={{ fontWeight: 600, fontSize: 13 }}>AI Card Generator</span>
-            <span style={{ fontSize: 10, color: "var(--text-4)" }}>(on-device heuristics)</span>
-            <button className="btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAiOpen(false)}><Icon name="x" size={13} /></button>
-          </div>
-          <div className="drawer-body">
-            <textarea value={source} onChange={(e) => setSource(e.target.value)} placeholder="Paste raw text: a paragraph, a definition, a chapter snippet. Generates cloze deletions or Q and A pairs from it." />
-            <div className="prompt-chips">
-              {(["qa", "cloze", "cards"] as const).map((m) => (
-                <button key={m} className={`chip ${genMode === m ? "active" : ""}`} onClick={() => setGenMode(m)}>
-                  {m === "qa" ? "Q&A pairs" : m === "cloze" ? "Cloze passages" : "Flashcards"}
-                </button>
-              ))}
-            </div>
-            <div className="slider-row">
-              <span>Difficulty</span>
-              <input type="range" min={1} max={5} value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value))} />
-              <span className="mono">{difficulty}/5</span>
-            </div>
-            <button className="btn btn-primary" onClick={generate}><Icon name="sparkles" size={13} /> Generate variants</button>
-            {variants.map((v, i) => (
-              <div key={i} className="gen-variant">
-                <span className="gv-note">{v.note}</span>
-                <MarkdownView text={v.front} />
-                <div style={{ borderTop: "1px solid var(--hairline)" }} />
-                <MarkdownView text={v.back} />
-                <div className="gv-actions">
-                  <button className="btn btn-sm" onClick={() => acceptVariant(v)}><Icon name="check" size={11} /> Use this</button>
-                  <button className="btn btn-sm btn-ghost" onClick={() => setVariants((vs) => vs.filter((_, j) => j !== i))}>Dismiss</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
