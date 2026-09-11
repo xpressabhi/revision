@@ -89,7 +89,7 @@ Images: paste an image directly into the editor textarea (max 1.5 MB) — it's s
 
 ## Sync between desktop and web app
 
-Both apps are local-first; they meet in a single JSON file you keep wherever you like (Documents, iCloud Drive, Dropbox…).
+Web app: **https://dailyrevision.vercel.app** (or your own Vercel deploy). Both apps are local-first; they meet in a single JSON file you keep wherever you like (Documents, iCloud Drive, Dropbox…).
 
 1. **Desktop**: Settings → Data → Sync → **Attach sync file…** → choose or create e.g. `revision-sync.json`.
 2. **Web** (Settings → Data → Sync): **Attach sync file…** and pick the same file. Chrome/Edge keep write access; Safari/Firefox show Export and Import/merge buttons instead.

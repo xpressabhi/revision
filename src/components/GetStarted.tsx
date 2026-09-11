@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { GUIDE_STEP_IDS, doneCount, stepsFor, type GetStartedState, type GuideAction, type GuideStepId } from "../lib/getStarted";
+import { WEB_APP_URL } from "../lib/links";
 import { Icon } from "./ui";
 
 type Props = {
@@ -19,7 +20,7 @@ export function GetStarted({ isTauri, state, onClose, onDismissForever, onAction
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const steps = stepsFor(isTauri ? "desktop" : "web", !isTauri);
+  const steps = stepsFor(isTauri ? "desktop" : "web", WEB_APP_URL.length > 0);
   const done = doneCount(state);
 
   return (

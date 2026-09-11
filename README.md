@@ -11,7 +11,7 @@ Local-first study app for principal-level interview prep. **FSRS-5 spaced repeti
 
 ## Web app
 
-The same React app runs as a static site (Vercel) and stores cards in **IndexedDB** — no server, no database, no account. Open it, study, and sync back to the desktop app whenever you want:
+**Live: [dailyrevision.vercel.app](https://dailyrevision.vercel.app)** — the same React app, hosted as a static site. Cards live in **IndexedDB** in your browser: no server, no database, no account. Open it, study, and sync back to the desktop app whenever you want:
 
 [Watch the walkthrough](docs/media/walkthrough.mp4) — first-run setup guide, review loop, adding a card and a live sync merge (~30s, no audio).
 
