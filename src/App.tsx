@@ -114,10 +114,10 @@ function prevActiveIdx(queue: CardWithState[], from: number, buried: Set<number>
 
 const THEME_ORDER: ThemeId[] = ["dark-a", "light-a", "dark-b", "light-b"];
 const VIEW_LABEL: Record<View, string> = {
-  dashboard: "Dashboard",
+  dashboard: "Study",
   browse: "Browse",
   review: "Review",
-  analytics: "Analytics",
+  analytics: "Progress",
   settings: "Settings",
 };
 
@@ -138,7 +138,8 @@ export default function App() {
     return Number.isFinite(v) && v >= 0.5 && v <= 1 ? v : 0.9;
   });
   const [newPerDay, setNewPerDay] = useState<number>(() => {
-    const v = Number(localStorage.getItem("recall_new_per_day"));
+    const raw = localStorage.getItem("recall_new_per_day");
+    const v = raw === null ? NaN : Number(raw);
     return Number.isFinite(v) && v >= 0 ? v : 20;
   });
   const [reviewsPerDay, setReviewsPerDay] = useState<number>(() => {
@@ -146,7 +147,8 @@ export default function App() {
     return Number.isFinite(v) && v > 0 ? v : 200;
   });
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("full");
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -237,6 +239,14 @@ export default function App() {
           toast(`Seeded ${created} starter cards`, "success");
         }
         await refresh();
+        // v0.6/v0.7 fresh installs persisted "0 new cards/day" by accident; restore the default
+        // for anyone who has never reviewed anything and never touched the setting.
+        if (!localStorage.getItem("recall_new_per_day_fixed")) {
+          localStorage.setItem("recall_new_per_day_fixed", "1");
+          if (localStorage.getItem("recall_new_per_day") === "0" && (await getReviews()).length === 0) {
+            setNewPerDay(20);
+          }
+        }
         setSyncTarget(await getSyncTargetInfo());
         if (isTauri) {
           try {
@@ -289,6 +299,11 @@ export default function App() {
   useEffect(() => {
     if (view === "settings") markGuideStep("settings");
   }, [view, markGuideStep]);
+
+  // ── close the mobile drawer whenever the view changes ──
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [view]);
 
   // ── theme / density / settings side effects ──
   useEffect(() => {
@@ -395,13 +410,17 @@ export default function App() {
         setView("settings");
         return;
       }
-      if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if ((e.key === "/" || e.key === "?") && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setHelpOpen((v) => !v);
         return;
       }
       if (helpOpen && e.key === "Escape") {
         setHelpOpen(false);
+        return;
+      }
+      if (mobileNavOpen && e.key === "Escape") {
+        setMobileNavOpen(false);
         return;
       }
       if (typing) return;
@@ -471,7 +490,7 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, review, cmdOpen, captureOpen, importOpen, helpOpen, cards, lastReview, desiredRetention, newLeftToday, reviewsPerDay]);
+  }, [view, review, cmdOpen, captureOpen, importOpen, helpOpen, mobileNavOpen, cards, lastReview, desiredRetention, newLeftToday, reviewsPerDay]);
 
   // ═══ review actions ═══
   const startReview = useCallback((scope: StudyScope) => {
@@ -1094,9 +1113,9 @@ export default function App() {
   }, [startReview]);
 
   const navActions = useMemo<CmdAction[]>(() => [
-    { id: "nav-dash", ico: "graph", title: "Go to Dashboard", group: "Navigate", tags: ["⌘1"], run: () => setView("dashboard") },
+    { id: "nav-dash", ico: "graph", title: "Go to Study", group: "Navigate", tags: ["⌘1"], run: () => setView("dashboard") },
     { id: "nav-browse", ico: "layers", title: "Go to Browse", group: "Navigate", tags: ["⌘2"], run: () => setView("browse") },
-    { id: "nav-analytics", ico: "chart", title: "Go to Analytics", group: "Navigate", tags: ["⌘4"], run: () => setView("analytics") },
+    { id: "nav-analytics", ico: "chart", title: "Go to Progress", group: "Navigate", tags: ["⌘4"], run: () => setView("analytics") },
     { id: "nav-settings", ico: "settings", title: "Go to Settings", group: "Navigate", tags: ["⌘5"], run: () => setView("settings") },
   ], []);
 
@@ -1109,6 +1128,7 @@ export default function App() {
     { id: "focus", ico: "focus", title: "Toggle focus mode", sub: "hide all chrome", group: "Actions", tags: ["⌘⇧F"], run: () => setFocusMode((f) => !f) },
     { id: "import", ico: "upload", title: "Import cards", sub: "CSV, bookmarks, paste, Anki", group: "Actions", run: () => setImportOpen(true) },
     { id: "export", ico: "download", title: "Export CSV", group: "Actions", run: () => void exportCsv() },
+    { id: "keyboard-map", ico: "keyboard", title: "Keyboard map", sub: "shortcuts and gestures (?)", group: "Actions", run: () => setHelpOpen(true) },
     { id: "sync-now", ico: "refresh", title: "Sync now", sub: syncTarget.label ?? "download sync file", group: "Actions", run: () => void onSyncNow() },
     { id: "setup-guide", ico: "book", title: "Setup guide", sub: `${doneCount(guide)}/${GUIDE_STEP_IDS.length} steps done`, group: "Actions", run: openGuide },
   ], [sidebarMode, inspectorOpen, theme, syncTarget.label, onSyncNow, guide, openGuide]);
@@ -1155,9 +1175,12 @@ export default function App() {
   }
 
   return (
-    <div className={`shell ${sidebarMode === "rail" ? "rail" : ""} ${sidebarMode === "hidden" ? "no-sidebar" : ""} ${!inspectorOpen ? "no-inspector" : ""}`}>
+    <div className={`shell ${sidebarMode === "rail" ? "rail" : ""} ${sidebarMode === "hidden" ? "no-sidebar" : ""} ${!inspectorOpen ? "no-inspector" : ""} ${mobileNavOpen ? "mobile-nav-open" : ""}`}>
       {/* titlebar */}
       <header className={`titlebar ${isTauri ? "is-tauri" : ""}`}>
+        <button className="btn-ghost tb-menu" aria-label="Open navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}>
+          <Icon name="sidebar" size={15} />
+        </button>
         <div className="tb-title" data-tauri-drag-region>
           <img className="tb-logo" src="/revision-logo.png" alt="Revision" draggable={false} />
           <span data-tauri-drag-region>Revision</span>
@@ -1168,11 +1191,11 @@ export default function App() {
             <Icon name="search" size={12} /> <span>Search anything…</span> <kbd className="keycap" style={{ marginLeft: "auto" }}>⌘K</kbd>
           </button>
           <button className="btn-ghost" title="Quick capture (⌘⇧K)" onClick={() => setCaptureOpen(true)}><Icon name="capture" size={14} /></button>
-          <button className="btn-ghost" title="Import" onClick={() => setImportOpen(true)}><Icon name="upload" size={14} /></button>
-          <button className="btn-ghost" title="Help (/)" onClick={() => setHelpOpen((v) => !v)}><Icon name="keyboard" size={14} /></button>
           <button className="btn-ghost" title="Settings (⌘,)" onClick={() => setView("settings")}><Icon name="settings" size={14} /></button>
         </div>
       </header>
+
+      {mobileNavOpen && <div className="mobile-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
 
       <div className={`shell-body ${view === "review" && review ? "reviewing" : ""}`}>
         <Sidebar
@@ -1182,11 +1205,11 @@ export default function App() {
           lapses={lapses}
           rail={sidebarMode === "rail"}
           activeGroup={view === "browse" ? browseGroup : null}
-          onGroup={(g) => { setBrowseGroup(g); setView("browse"); }}
-          onSmart={(id) => startReview({ kind: "smart", id: id as "due" | "new" | "learning" | "stuck" | "leeches" })}
-          onStudy={(scope) => startReview(scope)}
-          onNewCard={() => setEditor({ card: null })}
-          onView={(v) => setView(v)}
+          onGroup={(g) => { setBrowseGroup(g); setView("browse"); setMobileNavOpen(false); }}
+          onSmart={(id) => { startReview({ kind: "smart", id: id as "due" | "new" | "learning" | "stuck" | "leeches" }); setMobileNavOpen(false); }}
+          onStudy={(scope) => { startReview(scope); setMobileNavOpen(false); }}
+          onNewCard={() => { setEditor({ card: null }); setMobileNavOpen(false); }}
+          onView={(v) => { setView(v); setMobileNavOpen(false); }}
           toggleFocus={() => setFocusMode((f) => !f)}
           reviewActive={view === "review" && !!review}
         />

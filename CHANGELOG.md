@@ -7,6 +7,14 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 ### Added
 - **First-run setup guide** on web and desktop: four steps (review loop, add cards, tune the scheduler, sync or install the other build) with platform-specific copy, progress remembered in `localStorage`, auto-checks as you actually do each step, a dashboard checklist until it's done, and reopen from the keyboard overlay (`?`) or ⌘K.
 - **Walkthrough video** (`docs/media/walkthrough.mp4`) recorded from the real app by `scripts/record-walkthrough.mjs`: first-run guide, review loop, adding a card and a live sync merge (~30s, captioned).
+- **Clutter regression guard**: `scripts/ux-audit.mjs` counts visible chrome controls per view against budgets.
+
+### Changed
+- **Clutter-free pass** across every screen: Study has one primary action and three KPIs; Review dropped the gesture pad, grade readout and default inspector, with Skip/Edit/Bury/Suspend behind `···`; Browse hides Import/Export in `···` and drops the Interval/R(t) columns; Progress is down to three KPIs; Settings is three tabs (Study / Data / App) with Advanced collapsed; the keyboard map lives in the `?` overlay; the sidebar hides zero-count filters and speaks plainly ("Likely to forget", "Keep forgetting"). Advanced features stay one ⌘K or `?` away.
+- **Responsive layout**: the web app now works on phones — the sidebar becomes a slide-in drawer with a hamburger (≤900px), the inspector is hidden on narrow screens (≤1080px), grids stack and the editor, guide, command bar, quick capture and help become full-screen or bottom sheets (≤640px). Touch targets are ≥40px, review fills the screen with four compact grade buttons, Browse keeps Front/Due, and safe-area insets are respected.
+
+### Fixed
+- **First-run study blocker**: a fresh install persisted "0 new cards per day", leaving the queue permanently empty. Default is now 20, plus a one-time repair for installs that stored 0 with no review history.
 
 ## [v0.7.0] — 2026-09-10 — "Web + Sync"
 

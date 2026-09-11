@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { CardWithState, ReviewRow } from "../lib/types";
-import { gradeShare, reviewsPerDay, streakLength, recentReviews, retentionForecast, queueBuckets, type TagNode } from "../lib/derive";
+import { gradeShare, reviewsPerDay, streakLength, recentReviews, queueBuckets, type TagNode } from "../lib/derive";
 import { Icon } from "./ui";
 
 type Props = {
@@ -12,50 +12,36 @@ type Props = {
 
 const GRADE_COLORS = ["var(--danger)", "var(--warning)", "var(--accent)", "var(--info)"];
 
-export function AnalyticsView({ cards, reviews, groups, lastReview }: Props) {
+export function AnalyticsView({ cards, reviews, groups }: Props) {
   const streak = useMemo(() => streakLength(reviews), [reviews]);
   const perDay = useMemo(() => reviewsPerDay(reviews, 14), [reviews]);
   const shares = useMemo(() => gradeShare(reviews), [reviews]);
-  const forecast = useMemo(() => retentionForecast(cards, lastReview, 90), [cards, lastReview]);
   const buckets = useMemo(() => queueBuckets(cards), [cards]);
-  const recent = useMemo(() => recentReviews(reviews, 8), [reviews]);
+  const recent = useMemo(() => recentReviews(reviews, 5), [reviews]);
   const cardById = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
 
   const totalGrades = shares.reduce((a, b) => a + b.count, 0);
-  const loadToday = cards.filter((c) => c.state !== "new" && new Date(c.due_at).getTime() <= Date.now()).length;
-  const rAvg = useMemo(() => {
-    const rs: number[] = [];
-    for (const g of groups) if (g.rAvg !== null) rs.push(g.rAvg);
-    return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null;
-  }, [groups]);
-  const avgR90 = useMemo(() => {
-    const pts = forecast.filter((f) => f.r !== null);
-    const lastPts = pts.slice(-15);
-    return lastPts.length ? lastPts.reduce((a, b) => a + (b.r ?? 0), 0) / lastPts.length : null;
-  }, [forecast]);
+  const since30 = useMemo(() => Date.now() - 30 * 86_400_000, []);
+  const reviews30 = useMemo(() => reviews.filter((r) => new Date(r.created_at).getTime() >= since30).length, [reviews, since30]);
   const passRate30 = useMemo(() => {
-    const cutoff = Date.now() - 30 * 86_400_000;
-    const recent = reviews.filter((r) => new Date(r.created_at).getTime() >= cutoff);
-    if (recent.length === 0) return null;
-    return recent.filter((r) => r.grade >= 2).length / recent.length;
-  }, [reviews]);
+    const recent30 = reviews.filter((r) => new Date(r.created_at).getTime() >= since30);
+    if (recent30.length === 0) return null;
+    return recent30.filter((r) => r.grade >= 2).length / recent30.length;
+  }, [reviews, since30]);
 
   return (
     <div className="canvas-inner">
       <div className="page-head">
         <div className="page-title">
-          <Icon name="chart" size={18} /> Study Analytics
-          <span className="sub">FSRS load, retrieval, accuracy</span>
+          <Icon name="chart" size={18} /> Progress
+          <span className="sub">streak, accuracy, load</span>
         </div>
       </div>
 
       <div className="kpi-row">
         <div className="kpi"><span className="k accent">{streak}</span><span className="l">day streak</span></div>
-        <div className="kpi"><span className="k">{reviews.length}</span><span className="l">total reviews</span></div>
-        <div className="kpi"><span className="k" style={{ color: "var(--warning)" }}>{loadToday}</span><span className="l">due today</span></div>
-        <div className="kpi"><span className="k">{rAvg !== null ? `${Math.round(rAvg * 100)}%` : "-"}</span><span className="l">avg R(t) now</span></div>
-        <div className="kpi"><span className="k" style={{ color: "var(--accent)" }}>{avgR90 !== null ? `${Math.round(avgR90 * 100)}%` : "-"}</span><span className="l">projected R (90d)</span></div>
-        <div className="kpi"><span className="k">{passRate30 !== null ? `${Math.round(passRate30 * 100)}%` : "-"}</span><span className="l">pass rate (30d)</span></div>
+        <div className="kpi"><span className="k">{reviews30}</span><span className="l">reviews (30d)</span></div>
+        <div className="kpi"><span className="k" style={{ color: "var(--accent)" }}>{passRate30 !== null ? `${Math.round(passRate30 * 100)}%` : "-"}</span><span className="l">pass rate (30d)</span></div>
       </div>
 
       <div className="chart-grid">
@@ -80,7 +66,8 @@ export function AnalyticsView({ cards, reviews, groups, lastReview }: Props) {
 
       <div className="chart-grid">
         <div className="chart-card">
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Memory load (90-day forecast)</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>Coming up (90 days)</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)" }}>When learned cards will come due</div>
           <div className="queue-bars" style={{ marginTop: 4 }}>
             {buckets.map((b) => (
               <div className="queue-bar" key={b.label}>

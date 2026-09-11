@@ -157,8 +157,8 @@ async function main() {
   await page.keyboard.press("3");
   await caption("Press 1–4 to grade (or drag the card). Revision schedules the next review.", 2400);
 
-  // back to the dashboard
-  await click(page.getByRole("button", { name: "Dashboard", exact: true }).first());
+  // back to the study home
+  await click(page.getByRole("button", { name: "Study", exact: true }).first());
   await page.locator(".kpi-row").waitFor({ timeout: 8000 });
 
   // Step 2 — add a card
@@ -173,7 +173,8 @@ async function main() {
 
   // Step 3 — settings
   await click(page.locator("button[title^='Settings']").first());
-  await caption("Tune target retention (80–95%) and daily new/review limits.", 2400);
+  await caption("Tune target retention (80–95%) and daily new/review limits.", 2200);
+  await click(page.getByRole("button", { name: "Data", exact: true }));
   await page.locator("#sync-panel").scrollIntoViewIfNeeded();
   await caption("Then pair web and desktop through one JSON file you control.", 2200);
 
@@ -183,8 +184,8 @@ async function main() {
   await page.getByText("Merged:").waitFor({ timeout: 10000 });
   await caption("Sync now merges both ways: newest edit wins, review history combines.", 2800);
 
-  // Close — dashboard with the checklist
-  await click(page.getByRole("button", { name: "Dashboard", exact: true }).first());
+  // Close — study home with the checklist
+  await click(page.getByRole("button", { name: "Study", exact: true }).first());
   await caption("That's it. Your cards live in this browser and the desktop app.", 2600);
   await caption("Download: github.com/xpressabhi/revision/releases", 2600);
 

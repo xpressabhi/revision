@@ -15,8 +15,8 @@ The same React app runs as a static site (Vercel) and stores cards in **IndexedD
 
 [Watch the walkthrough](docs/media/walkthrough.mp4) — first-run setup guide, review loop, adding a card and a live sync merge (~30s, no audio).
 
-1. In the desktop app: **Settings → Sync → Attach sync file…** (e.g. `~/Documents/revision-sync.json`).
-2. In the web app: **Settings → Sync → Attach sync file…** and pick the same file (Chromium; Safari/Firefox fall back to export/import buttons).
+1. In the desktop app: **Settings → Data → Sync → Attach sync file…** (e.g. `~/Documents/revision-sync.json`).
+2. In the web app: **Settings → Data → Sync → Attach sync file…** and pick the same file (Chromium; Safari/Firefox fall back to export/import buttons).
 3. Hit **Sync now** on either side. Cards match by a stable id, the newest edit wins, review history is merged and deletions propagate.
 
 Deploying the web app is one Vercel project pointing at this repo — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#web-app--vercel).

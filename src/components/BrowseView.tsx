@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CardWithState } from "../lib/types";
-import { cardRetrievability, dueInLabel, formatInterval } from "../lib/fsrs";
+import { dueInLabel } from "../lib/fsrs";
 import { firstTag } from "../lib/derive";
 import { Icon } from "./ui";
 
@@ -25,6 +25,7 @@ type Props = {
 export function BrowseView(p: Props) {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   const rows = useMemo(() => {
@@ -87,9 +88,24 @@ export function BrowseView(p: Props) {
           <Icon name="layers" size={18} /> Browse
           <span className="sub">{p.counts.total} cards, {p.counts.due} due</span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={p.onImport}><Icon name="upload" size={12} /> Import</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => p.onExportCsv()}><Icon name="download" size={12} /> Export CSV</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="more-menu">
+            <button
+              className="btn btn-ghost btn-sm"
+              aria-label="More actions"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <div className="more-pop" role="menu">
+                <button role="menuitem" onClick={() => { setMenuOpen(false); p.onImport(); }}><Icon name="upload" size={12} /> Import cards</button>
+                <button role="menuitem" onClick={() => { setMenuOpen(false); p.onExportCsv(); }}><Icon name="download" size={12} /> Export CSV</button>
+              </div>
+            )}
+          </div>
           <button className="btn btn-primary" onClick={p.onNew}><Icon name="plus" size={12} /> New card</button>
         </div>
       </div>
@@ -130,18 +146,15 @@ export function BrowseView(p: Props) {
               <th style={{ width: 30 }}>
                 <input ref={selectAllRef} type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all visible cards" />
               </th>
-              <th style={{ width: "34%" }}>Front</th>
-              <th>Deck</th>
-              <th>State</th>
+              <th style={{ width: "42%" }}>Front</th>
+              <th className="col-tag">Tag</th>
+              <th className="col-state">State</th>
               <th>Due</th>
-              <th>Interval</th>
-              <th>R(t)</th>
               <th style={{ width: 84 }}></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((c) => {
-              const r = cardRetrievability(c, p.lastReview.get(c.id));
               const isSel = selected.has(c.id);
               return (
                 <tr key={c.id} onClick={() => p.onEdit(c)} className={isSel ? "selected" : ""}>
@@ -149,14 +162,10 @@ export function BrowseView(p: Props) {
                     <input type="checkbox" checked={isSel} onChange={() => toggle(c.id)} aria-label={`Select ${c.front.slice(0, 40)}`} />
                   </td>
                   <td className="td-front" title={c.front}>{c.front.replace(/\{\{c\d+::/g, "").replace(/\}\}/g, "").slice(0, 70)}</td>
-                  <td className="td-sub">{firstTag(c)}</td>
-                  <td><span className={`chip ${c.state}`}>{c.state === "new" ? "New" : c.state === "learning" ? "Learning" : "Review"}</span></td>
+                  <td className="td-sub col-tag">{firstTag(c)}</td>
+                  <td className="col-state"><span className={`chip ${c.state}`}>{c.state === "new" ? "New" : c.state === "learning" ? "Learning" : "Review"}</span></td>
                   <td className="mono" style={{ color: new Date(c.due_at).getTime() <= Date.now() && c.state !== "new" ? "var(--danger)" : "var(--text-2)" }}>
                     {c.state === "new" ? "-" : dueInLabel(c.due_at)}
-                  </td>
-                  <td className="mono">{c.state === "new" ? "-" : c.interval >= 1 ? formatInterval(c.interval) : "10m"}</td>
-                  <td className="mono" style={{ color: r ? (r >= 0.9 ? "var(--accent)" : r >= 0.8 ? "var(--warning)" : "var(--danger)") : "var(--text-4)" }}>
-                    {r === null ? "-" : `${Math.round(r * 100)}%`}
                   </td>
                   <td>
                     <div className="row-actions" onClick={(e) => e.stopPropagation()}>
@@ -169,7 +178,7 @@ export function BrowseView(p: Props) {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={6}>
                   <div className="empty-state" style={{ border: "none", padding: "40px 20px" }}>
                     Nothing matches. Create a card with <Icon name="plus" size={11} /> New card.
                   </div>

@@ -46,12 +46,15 @@ export function Sidebar({ groups, cards, lastReview, lapses, rail, activeGroup, 
     const le = smartFilterCount(cards, "leeches", lastReview, lapses);
     return [
       { id: "due", label: "Due now", ico: "clock" as const, count: d, tone: d > 0 ? "due" as const : null },
-      { id: "stuck", label: "Stuck < 80%", ico: "warn" as const, count: s, tone: s > 0 ? "due" as const : null },
-      { id: "leeches", label: "Leeches", ico: "flame" as const, count: le, tone: le > 0 ? "due" as const : null },
+      { id: "stuck", label: "Likely to forget", ico: "warn" as const, count: s, tone: s > 0 ? "due" as const : null },
+      { id: "leeches", label: "Keep forgetting", ico: "flame" as const, count: le, tone: le > 0 ? "due" as const : null },
       { id: "learning", label: "Learning", ico: "bolt" as const, count: l, tone: "learning" as const },
       { id: "new", label: "New cards", ico: "sparkles" as const, count: n, tone: "new" as const },
     ];
   }, [cards, lastReview, lapses]);
+
+  // Only surface a focus filter when it has something to show.
+  const visibleSmart = useMemo(() => smart.filter((f) => f.id !== "due" && f.count > 0), [smart]);
 
   const dim = rail;
 
@@ -66,7 +69,7 @@ export function Sidebar({ groups, cards, lastReview, lapses, rail, activeGroup, 
               <span>Start Review</span>
               {smart[0].count > 0 && <span className="sb-count">{smart[0].count}</span>}
             </div>
-            {smart.map((f) => (
+            {visibleSmart.map((f) => (
               <div
                 key={f.id}
                 className="sb-item"
@@ -120,8 +123,8 @@ export function Sidebar({ groups, cards, lastReview, lapses, rail, activeGroup, 
         {!dim && (
           <div className="sb-section">
             <div className="sb-label">Overview</div>
-            <div className="sb-item" {...itemProps(() => onView("dashboard"))}><span className="sb-ico"><Icon name="graph" /></span><span>Dashboard</span></div>
-            <div className="sb-item" {...itemProps(() => onView("analytics"))}><span className="sb-ico"><Icon name="chart" /></span><span>Study Analytics</span></div>
+            <div className="sb-item" {...itemProps(() => onView("dashboard"))}><span className="sb-ico"><Icon name="graph" /></span><span>Study</span></div>
+            <div className="sb-item" {...itemProps(() => onView("analytics"))}><span className="sb-ico"><Icon name="chart" /></span><span>Progress</span></div>
           </div>
         )}
       </div>

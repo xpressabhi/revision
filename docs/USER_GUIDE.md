@@ -37,7 +37,7 @@ Drag and camera-free pointer gestures use one grade mapping:
 - **Flick** the card any direction before reveal — reveals the answer
 - **Grab & drag** a shown card — it follows the pointer with a tilt, grade badges light up as you drag; release past the glow to *fly it out and grade*, release short to *spring back* with no effect
 - Drags ignore links/buttons inside the card; on touch screens vertical swipes scroll instead of grading
-- A **gesture map** (compact d-pad) floats at the top-right of the card during review — hover to highlight, click a direction to grade it directly.
+- Drag grading needs no on-screen pad: flick the card or use the grade bar (the map is in the `?` overlay).
 
 ## Keyboard map (core)
 
@@ -52,18 +52,20 @@ Drag and camera-free pointer gestures use one grade mapping:
 | `⇧G` | Undo last grade |
 | `⌃→` | Skip card |
 | `E` / `S` / `B` | Edit / Suspend / Bury |
-| `⌘1–5` | Dashboard · Browse · Review · Analytics · Settings |
+| `⌘1–5` | Study · Browse · Review · Progress · Settings |
 | `⌘S` | Sidebar: full → rail → hidden |
 | `⌥⌘I` | Toggle inspector |
 | `⌘⇧F` | Focus mode |
 | `⌘⇧T` | Cycle theme |
 | `⌘⌃1–3` | Density: relaxed / standard / compact |
 | `⌘,` | Settings |
-| `/` | Keyboard-map overlay |
+| `/` or `?` | Keyboard-map overlay |
+
+Review keeps the screen minimal: the four grade buttons with their FSRS intervals, Undo and End. Skip, Edit, Bury and Suspend live in the `···` menu (their keyboard shortcuts still work).
 
 ## Importing
 
-One sheet (**Import** in the titlebar, Browse or ⌘K) covers every format:
+One sheet (⌘K → Import cards, the Browse `···` menu, or Settings → Data) covers every format:
 
 - **CSV / bookmarks**: drop or pick a file. Revision CSV, Chrome bookmarks HTML (`Bookmarks.html`) and bookmarks JSON are detected automatically.
 - **Paste text**: one card per line, `Front :: Back` (or a tab between them).
@@ -89,8 +91,8 @@ Images: paste an image directly into the editor textarea (max 1.5 MB) — it's s
 
 Both apps are local-first; they meet in a single JSON file you keep wherever you like (Documents, iCloud Drive, Dropbox…).
 
-1. **Desktop**: Settings → Sync → **Attach sync file…** → choose or create e.g. `revision-sync.json`.
-2. **Web** (`Settings → Sync`): **Attach sync file…** and pick the same file. Chrome/Edge keep write access; Safari/Firefox show Export and Import/merge buttons instead.
+1. **Desktop**: Settings → Data → Sync → **Attach sync file…** → choose or create e.g. `revision-sync.json`.
+2. **Web** (Settings → Data → Sync): **Attach sync file…** and pick the same file. Chrome/Edge keep write access; Safari/Firefox show Export and Import/merge buttons instead.
 3. Click **Sync now** on either side — it reads the file, merges, and writes the result back. Change the file or detach any time.
 
 Merge rules: cards are matched by a stable id, the newest content edit wins, scheduling state is taken from the most recent review, review history is unioned (no duplicates), and deletions propagate. When you have no attached file, use **Export sync file** and **Import / merge sync file** to move data manually.

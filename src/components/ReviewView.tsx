@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CardWithState, Grade } from "../lib/types";
-import { cardRetrievability, predictIntervals } from "../lib/fsrs";
+import { predictIntervals } from "../lib/fsrs";
 import { MarkdownView } from "../lib/markdown";
 import { dragTransform, useDragGesture, type DragDir } from "../lib/gestures";
 import { Icon, Keycap, fmtPct } from "./ui";
@@ -36,7 +36,11 @@ export function ReviewView(p: Props) {
   const active = useMemo(() => p.queue.filter((c) => !p.buried.has(c.id)), [p.queue, p.buried]);
   const total = active.length;
   const done = p.sessionStats.answered;
-  const [hoverZone, setHoverZone] = useState<Grade | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [p.idx, p.shown]);
 
   const segStats = useMemo(() => {
     const counts = { learning: 0, review: 0, new: 0 };
@@ -47,10 +51,6 @@ export function ReviewView(p: Props) {
     }
     return counts;
   }, [active]);
-
-  useEffect(() => {
-    if (!p.shown) setHoverZone(null);
-  }, [p.shown]);
 
   const drag = useDragGesture(p.shown, {
     onTap: () => actNow(() => p.onFlip()),
@@ -98,9 +98,6 @@ export function ReviewView(p: Props) {
   }
 
   const preds = predictIntervals(card, p.desiredRetention);
-  const rToday = cardRetrievability(card, p.lastReviewIso);
-  const hoverPred = hoverZone ? preds.find((x) => x.key === hoverZone) : null;
-  const fsrsPred = preds.find((x) => x.key === 3);
 
   const gradeZones: { g: Grade; label: string; cls: string; arr: string }[] = [
     { g: 1, label: "Again", cls: "again", arr: "←" },
@@ -124,9 +121,7 @@ export function ReviewView(p: Props) {
           })}
         </div>
         <div className="session-meta" style={{ fontSize: 10.5, color: "var(--text-4)" }}>
-          <span style={{ color: "var(--warning)" }}>L {segStats.learning}</span>
-          <span style={{ color: "var(--accent)" }}>R {segStats.review}</span>
-          <span style={{ color: "var(--info)" }}>N {segStats.new}</span>
+          {Math.max(0, total - done - 1)} left
         </div>
       </div>
 
@@ -156,7 +151,7 @@ export function ReviewView(p: Props) {
         )}
         <div
           className={`flip-card ${p.shown ? "flipped" : ""} ${drag.state.phase === "dragging" ? "dragging" : ""} ${drag.state.phase === "flying" ? "flying" : ""}`}
-          style={{ minHeight: 360, ...dragTransform(drag.state, p.shown) }}
+          style={dragTransform(drag.state, p.shown)}
         >
           {drag.state.phase !== "idle" && p.shown && (
             <SwipeBadges dir={drag.state.dir} phase={drag.state.phase} />
@@ -175,18 +170,8 @@ export function ReviewView(p: Props) {
               <MarkdownView text={card.front} revealCloze={p.shown ? "all" : p.revealed} />
             </div>
             <div className="face-hint">
-              {p.shown ? (
-                <>
-                  <Keycap>1-4</Keycap> grade, <Keycap>E</Keycap> edit, <Keycap>S</Keycap> suspend, <Keycap>B</Keycap> bury, <Keycap>⇧G</Keycap> undo
-                  <span className="gesture-hint">, drag card to grade</span>
-                </>
-              ) : (
-                <>
-                  <Keycap>Space</Keycap> reveal answer
-                  {hasCloze(card.front) && <><Keycap>G</Keycap> reveal next cloze ({p.revealed}/{clozeBlocks(card.front)})</>}
-                  <span className="gesture-hint">, click card or flick it to flip</span>
-                </>
-              )}
+              <Keycap>Space</Keycap> reveal
+              {hasCloze(card.front) && <> <Keycap>G</Keycap> cloze ({p.revealed}/{clozeBlocks(card.front)})</>}
             </div>
           </div>
 
@@ -199,42 +184,26 @@ export function ReviewView(p: Props) {
               <div style={{ paddingTop: hasCloze(card.front) ? 12 : 0 }}><MarkdownView text={card.back} /></div>
             </div>
             <div className="face-hint">
-              <Keycap>1</Keycap> Again <Keycap>2</Keycap> Hard <Keycap>3</Keycap> Good <Keycap>4</Keycap> Easy. Hover any zone for the FSRS delta
+              <Keycap>1–4</Keycap> grade
             </div>
           </div>
         </div>
-        <GesturePad shown={p.shown} onGrade={(g) => p.onGrade(g)} />
       </div>
 
       {/* grading bar */}
       <div>
-        <div className="grade-readout">
-          {hoverPred ? (
-            <>
-              If <b className={zoneCls(hoverZone!)}>{gradeZones.find((z) => z.g === hoverZone)?.label}</b> then interval <b>{hoverPred.label}</b>
-              {hoverPred.retention !== null && <> with R at due <b>{fmtPct(hoverPred.retention)}</b></>}
-              {hoverZone === 1 && <span>. Stability collapses, card restarts at 10m</span>}
-            </>
-          ) : (
-            <>
-              R(t) today <b className={rToday !== null && rToday < 0.8 ? "bad" : rToday !== null && rToday < 0.9 ? "warn" : ""}>{fmtPct(rToday)}</b>
-              {fsrsPred && <> with Good at {fsrsPred.label}</>}
-              <span style={{ color: "var(--text-4)" }}>(FSRS-5, target {Math.round(p.desiredRetention * 100)}%)</span>
-            </>
-          )}
-        </div>
         <div className="grade-bar">
           {gradeZones.map((z) => {
             const pr = preds.find((x) => x.key === z.g)!;
+            const tip = `${z.label} · next in ${pr.label}${pr.retention !== null ? ` · remember at due ${fmtPct(pr.retention)}` : ""}`;
             return (
               <button
                 key={z.g}
                 className={`grade-zone ${z.cls}`}
                 onClick={act(() => p.onGrade(z.g))}
-                onMouseEnter={() => setHoverZone(z.g)}
-                onMouseLeave={() => setHoverZone(null)}
+                title={tip}
               >
-                <span className="g-swipe" title={`drag/swipe ${z.arr}`}>{z.arr}</span>
+                <span className="g-swipe" aria-hidden="true">{z.arr}</span>
                 <span className="g-key">{z.g}</span>
                 <span className="g-label">{z.label}</span>
                 <span className="g-int">{pr.label}</span>
@@ -242,52 +211,32 @@ export function ReviewView(p: Props) {
             );
           })}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-          <div style={{ display: "flex", gap: 14 }}>
-            <button className="btn btn-ghost btn-sm" onClick={act(p.onUndo)} disabled={!p.canUndo} title="Undo last grade (⇧G)"><Icon name="undo" size={12} /> Undo</button>
-            <button className="btn btn-ghost btn-sm" onClick={act(p.onSkip)} title="Skip (⌃→)"><Icon name="chevron" size={12} className="rv-skip" /> Skip</button>
-            <button className="btn btn-ghost btn-sm" onClick={act(p.onEdit)} title="Edit (E)"><Icon name="card" size={12} /> Edit</button>
-          </div>
-          <div className="session-meta" style={{ fontSize: 10.5 }}>
-            <button className="btn btn-ghost btn-sm" onClick={p.onBury} title="Bury until next session (B)">Bury</button>
-            <button className="btn btn-ghost btn-sm" onClick={p.onSuspend} title="Suspend card (S)">Suspend</button>
-            <button className="btn btn-ghost btn-sm" onClick={p.onEnd} title="End session (⌘↵)"><Icon name="x" size={11} /> End</button>
+        <div className="rv-actions">
+          <button className="btn btn-ghost btn-sm" onClick={act(p.onUndo)} disabled={!p.canUndo} title="Undo last grade (⇧G)"><Icon name="undo" size={12} /> Undo</button>
+          <span style={{ flex: 1 }} />
+          <button className="btn btn-ghost btn-sm" onClick={p.onEnd} title="End session (⌘↵)"><Icon name="x" size={11} /> End</button>
+          <div className="more-menu">
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="More actions"
+              title="More actions"
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <div className="more-pop up" role="menu">
+                <button role="menuitem" onClick={() => { setMenuOpen(false); act(p.onSkip)(); }}>Skip card</button>
+                <button role="menuitem" onClick={() => { setMenuOpen(false); act(p.onEdit)(); }}>Edit card</button>
+                <button role="menuitem" onClick={() => { setMenuOpen(false); act(p.onBury)(); }}>Bury until next session</button>
+                <button role="menuitem" onClick={() => { setMenuOpen(false); act(p.onSuspend)(); }}>Suspend card</button>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-const PAD_CELLS: { dir: DragDir; grade: number; label: string; cls: string; area: string }[] = [
-  { dir: "up", grade: 4, label: "EASY", cls: "easy", area: "1 / 2" },
-  { dir: "left", grade: 1, label: "AGAIN", cls: "again", area: "2 / 1" },
-  { dir: "right", grade: 3, label: "GOOD", cls: "good", area: "2 / 3" },
-  { dir: "down", grade: 2, label: "HARD", cls: "hard", area: "3 / 2" },
-];
-
-function GesturePad({ shown, onGrade }: { shown: boolean; onGrade: (g: Grade) => void }) {
-  return (
-    <div className="gesture-pad" role="group" aria-label="Gesture map. Swipe or drag the card in a direction to grade. Tap to flip">
-      <div className="gp-grid">
-        <div className="gp-center">
-          <span>tap</span>
-          <span className="gp-sub">flip</span>
-        </div>
-        {PAD_CELLS.map((c) => (
-          <button
-            key={c.dir}
-            className={`gp-cell ${c.cls}`}
-            style={{ gridArea: c.area }}
-            title={`${c.label} (grade ${c.grade})`}
-            onClick={() => onGrade(c.grade as Grade)}
-          >
-            <span className="gp-arrow">{c.dir === "up" ? "↑" : c.dir === "down" ? "↓" : c.dir === "left" ? "←" : "→"}</span>
-            {c.label}
-          </button>
-        ))}
-      </div>
-      <span className="gp-caption">gestures{shown ? " (grade)" : " (tap to reveal)"}</span>
     </div>
   );
 }
@@ -318,8 +267,4 @@ function hasCloze(front: string): boolean {
 
 function clozeBlocks(front: string): number {
   return (front.match(/\{\{c\d+::/g) ?? []).length;
-}
-
-function zoneCls(g: Grade): string {
-  return g === 1 ? "bad" : g === 2 ? "warn" : "";
 }

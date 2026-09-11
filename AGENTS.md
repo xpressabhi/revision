@@ -50,4 +50,6 @@ Local-first flashcard/spaced-repetition app for interview prep. **Tauri 2 + Reac
 - `tsc` is strict (verbatimModuleSyntax) — use `import type` for type-only imports.
 - No comments in code unless the user asks; match existing commit style (`feat:`/`fix:` lowercase, no scope).
 - Settings/theme/density/limits persist in `localStorage` (`recall_*` keys). Global quick capture is `⌥⇧K` (registered in Rust, event `global-capture`).
+- UX rules: keep the clutter budgets (`node scripts/ux-audit.mjs` — Study ≤6 chrome controls, Browse ≤8, Progress ≤3, Settings ≤6, Review ≤9). One primary action per view, no metric duplicated across surfaces, plain language at level 1, FSRS jargon only in details (Inspector / `?` overlay), advanced or rare actions live in `···` menus or Settings. `/` or `?` opens the keyboard map.
+- Responsive breakpoints (web app): ≤1080px inspector hidden, ≤900px sidebar becomes a hamburger drawer, ≤640px single-column grids and overlays become full-screen/bottom sheets. Check mobile changes at 390×844 (Playwright resize) and desktop at 1440×900.
 - The Anki staging command extracts to the app config dir (`anki-import/collection.anki21`) because `tauri-plugin-sql` resolves `sqlite:` paths relative to `app_config_dir()`.

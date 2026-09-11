@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CardWithState, ReviewRow } from "../lib/types";
-import { heatGrid, streakLength, retentionForecast, queueBuckets, type TagNode } from "../lib/derive";
+import { heatGrid, streakLength, retentionForecast, type TagNode } from "../lib/derive";
 import { Icon, ProgressRing } from "./ui";
 
 type Props = {
@@ -22,20 +22,17 @@ export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention
   const streak = useMemo(() => streakLength(reviews), [reviews]);
   const grid = useMemo(() => heatGrid(reviews), [reviews]);
   const forecast = useMemo(() => retentionForecast(cards, lastReview), [cards, lastReview]);
-  const buckets = useMemo(() => queueBuckets(cards), [cards]);
   const dueNow = useMemo(() => cards.filter((c) => c.state !== "new" && new Date(c.due_at).getTime() <= Date.now() && !c.tags.includes("suspended")).length, [cards]);
-  const totalReviews = reviews.length;
 
   return (
     <div className="canvas-inner">
       <div className="page-head">
         <div className="page-title">
-          <Icon name="graph" size={19} /> Mastery Hub
+          <Icon name="graph" size={19} /> Study
           <span className="sub">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="chip" style={{ color: "var(--warning)" }}><Icon name="clock" size={11} /> {dueNow} due now</span>
-          <button className="btn btn-primary" onClick={onStudyAll}><Icon name="bolt" size={13} /> Study all</button>
+          <button className="btn btn-primary" onClick={onStudyAll}><Icon name="bolt" size={13} /> Study {dueNow > 0 ? `${dueNow} due` : "all"}</button>
         </div>
       </div>
 
@@ -49,10 +46,9 @@ export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention
       )}
 
       <div className="kpi-row">
-        <div className="kpi"><span className="k accent">{streak}</span><span className="l">day streak</span></div>
-        <div className="kpi"><span className="k">{totalReviews}</span><span className="l">reviews all-time</span></div>
-        <div className="kpi"><span className="k">{cards.length}</span><span className="l">cards in decay curve</span></div>
-        <div className="kpi"><span className="k">{Math.round(desiredRetention * 100)}%</span><span className="l">FSRS target retention</span></div>
+        <div className="kpi"><span className="k accent">{dueNow}</span><span className="l">due today</span></div>
+        <div className="kpi"><span className="k">{streak}</span><span className="l">day streak</span></div>
+        <div className="kpi"><span className="k">{Math.round(desiredRetention * 100)}%</span><span className="l">target retention</span></div>
       </div>
 
       <div className="heatmap">
@@ -73,16 +69,11 @@ export function Dashboard({ cards, reviews, groups, lastReview, desiredRetention
         </div>
       </div>
 
-      <div className="chart-grid">
+      <div className="chart-grid" style={{ gridTemplateColumns: "1fr" }}>
         <div className="chart-card">
           <div style={{ fontWeight: 600, fontSize: 13 }}>Retention forecast</div>
-          <div style={{ fontSize: 11, color: "var(--text-3)" }}>Average R(t) across reviewed cards. Dashed line is your target ({Math.round(desiredRetention * 100)}%)</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)" }}>Average recall across reviewed cards. Dashed line is your target ({Math.round(desiredRetention * 100)}%)</div>
           <RetentionChart forecast={forecast} target={desiredRetention} />
-        </div>
-        <div className="chart-card">
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Forecast review queue</div>
-          <div style={{ fontSize: 11, color: "var(--text-3)" }}>When cards will come due (learned cards only)</div>
-          <QueueChart buckets={buckets} />
         </div>
       </div>
 
@@ -188,50 +179,32 @@ function RetentionChart({ forecast, target }: { forecast: { day: number; r: numb
   );
 }
 
-function QueueChart({ buckets }: { buckets: { label: string; count: number; days: number }[] }) {
-  const max = Math.max(1, ...buckets.map((b) => b.count));
-  return (
-    <div className="queue-bars">
-      {buckets.map((b) => (
-        <div className="queue-bar" key={b.label}>
-          <span className="lbl">{b.label}</span>
-          <div className="track"><div className={`fill ${b.days <= 1 ? "danger" : b.days <= 3 ? "warn" : ""}`} style={{ width: `${(b.count / max) * 100}%` }} /></div>
-          <span className="val">{b.count}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ExamPlan({ remainingNew, newPerDay }: { remainingNew: number; newPerDay: number }) {
   const [date, setDate] = useState(() => localStorage.getItem("recall_exam_date") ?? "");
   const daysLeft = date ? Math.max(0, Math.ceil((new Date(`${date}T23:59:59`).getTime() - Date.now()) / 86_400_000)) : null;
   const needed = daysLeft && daysLeft > 0 ? Math.ceil(remainingNew / daysLeft) : remainingNew;
   const feasible = needed <= newPerDay;
   return (
-    <div className="chart-card exam-plan">
-      <div>
-        <div style={{ fontWeight: 600, fontSize: 13 }}>Exam plan</div>
-        <div style={{ fontSize: 11, color: "var(--text-3)" }}>
-          {remainingNew} new cards left. {daysLeft === null ? "Set a target date to see the daily pace." : daysLeft === 0 ? "Target date is today." : `${daysLeft} days left.`}
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => {
-            setDate(e.target.value);
-            localStorage.setItem("recall_exam_date", e.target.value);
-          }}
-          style={{ background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 8, padding: "6px 8px", fontSize: 12, color: "var(--text-1)" }}
-        />
-        {date && (
-          <span className="chip" style={{ color: feasible ? "var(--accent)" : "var(--danger)" }}>
-            {feasible ? `${needed}/day fits your ${newPerDay} limit` : `${needed}/day needed, limit is ${newPerDay}`}
-          </span>
-        )}
-      </div>
+    <div className="exam-plan-row">
+      <Icon name="clock" size={13} />
+      <span style={{ fontSize: 12, color: "var(--text-2)" }}>
+        Exam plan — {remainingNew} new cards left. {daysLeft === null ? "Set a target date to see the daily pace." : daysLeft === 0 ? "Target date is today." : `${daysLeft} days left.`}
+      </span>
+      {date && (
+        <span className="chip" style={{ color: feasible ? "var(--accent)" : "var(--danger)" }}>
+          {feasible ? `${needed}/day fits your ${newPerDay} limit` : `${needed}/day needed, limit is ${newPerDay}`}
+        </span>
+      )}
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => {
+          setDate(e.target.value);
+          localStorage.setItem("recall_exam_date", e.target.value);
+        }}
+        aria-label="Exam date"
+        style={{ marginLeft: "auto", background: "var(--raised)", border: "1px solid var(--hairline)", borderRadius: 8, padding: "4px 8px", fontSize: 12, color: "var(--text-1)" }}
+      />
     </div>
   );
 }
@@ -247,8 +220,7 @@ function DeckCard({ group, index, onStudy, onBrowse }: { group: TagNode; index: 
         <div className="dc-info">
           <div className="dc-name ellipsis">{group.root}</div>
           <div className="dc-meta">
-            <span>{group.total} cards · {group.total - group.newCount - group.learning} mature</span>
-            <span>R avg {group.rAvg !== null ? Math.round(group.rAvg * 100) : "-"}%</span>
+            <span>{group.total} cards</span>
           </div>
         </div>
       </div>
