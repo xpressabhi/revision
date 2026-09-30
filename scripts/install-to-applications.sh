@@ -1,32 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 # Installs the freshly built .app to /Applications and refreshes tray
-# Usage: npm run tauri:build:install  (builds then calls this) or ./scripts/install-to-applications.sh directly
+# Usage: npm run desktop:install  (builds then calls this) or ./scripts/install-to-applications.sh directly
 
 APP_NAME="Revision.app"
-SRC="src-tauri/target/release/bundle/macos/${APP_NAME}"
+SRC="dist/${APP_NAME}"
 DEST="/Applications/${APP_NAME}"
 
 if [ ! -d "${SRC}" ]; then
-  # Prefer release, fallback to debug (debug builds faster and works when release has sqlx LINKEDIT issue on this toolchain)
-  FOUND=$(find src-tauri/target/release/bundle src-tauri/target/debug/bundle -name "${APP_NAME}" -type d 2>/dev/null | head -n 1 || true)
-  if [ -n "${FOUND}" ]; then
-    SRC="${FOUND}"
-  else
-    echo "✗ Build output not found. Run: npm run tauri build"
-    echo "  Expected: ${SRC}"
-    exit 1
-  fi
+  echo "✗ Build output not found: ${SRC}"
+  echo "  Run: npm run desktop:build"
+  exit 1
 fi
 
 echo "→ Installing ${SRC} → ${DEST}"
 
 # Quit running instance if any (so tray refreshes)
-if pgrep -f "Revision" >/dev/null 2>&1; then
+if pgrep -x "Revision" >/dev/null 2>&1 || pgrep -f "Revision.app/Contents/MacOS" >/dev/null 2>&1; then
   echo "→ Quitting running Revision..."
   osascript -e 'tell application "Revision" to quit' 2>/dev/null || true
-  # Also kill via pkill as fallback
-  pkill -f "Revision" 2>/dev/null || true
+  pkill -f "Revision.app/Contents/MacOS" 2>/dev/null || true
   sleep 1.5
 fi
 

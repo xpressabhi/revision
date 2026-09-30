@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const APP_URL = "http://localhost:1420";
+const APP_URL = "http://127.0.0.1:1420";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const CHROME_SELECTORS = ".page-head, .browse-toolbar, .settings-tabs, .getstarted-banner, .exam-plan-row, .bulk-bar";

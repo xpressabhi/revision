@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const APP_URL = "http://localhost:1420";
+const APP_URL = "http://127.0.0.1:1420";
 const TMP = path.join(os.tmpdir(), `revision-walkthrough-${Date.now()}`);
 const RAW_DIR = path.join(TMP, "raw");
 const SYNC_FILE = path.join(TMP, "demo-sync.json");

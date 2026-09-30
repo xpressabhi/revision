@@ -27,7 +27,8 @@ Plan: `tasks/plan.md`
 
 ## Phase 3 — shipping
 
-- [ ] T7: scripts + local packaging (package.json, install script, desktop build/install smoke)
+- [x] T7: scripts + local packaging (package.json, install script, desktop build/install smoke)
+- [x] T7b: installed to /Applications, launched, ran (2 procs), quit cleanly; dmg 6.8 MB (revision-0.7.0.dmg)
 - [ ] T8: CI rewrite + dry run (mac/win/linux jobs, artifact names recorded)
 - [ ] T9: cleanup + docs + version 0.8.0 (delete src-tauri, AGENTS/README/DEVELOPMENT/USER_GUIDE, CHANGELOG)
 
