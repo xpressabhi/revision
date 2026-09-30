@@ -5,8 +5,8 @@ Plan: `tasks/plan.md`
 
 ## Phase 1 — the app runs on tinyjs
 
-- [ ] T1: tinyjs scaffold + first dev boot (tinyjs.json, icon.png, backend skeleton, types)
-- [ ] T2: backend DB api + `$n→?n` translation + tests + multi-statement audit
+- [x] T1: tinyjs scaffold + first dev boot (tinyjs.json, icon.png, backend skeleton, types)
+- [x] T2: backend DB api + `$n→?n` translation + tests + multi-statement audit
 - [ ] T3: frontend desktop seam (platform.ts, db/tinyjs.ts, db.ts, vite.config.ts)
 
 ### Checkpoint C1
@@ -37,9 +37,9 @@ Plan: `tasks/plan.md`
 
 ## Spec open items (resolve in-task)
 
-- [ ] 1. `backend/**` auto-restart in `tinyjs dev` (T1)
-- [ ] 2. `?N` binding semantics verified (T2)
-- [ ] 3. multi-statement `execute` audit (T2)
+- [x] 1. `backend/**` auto-restart in `tinyjs dev` (T1) — backend/ not watched; src/ edits restart backend (documented)
+- [x] 2. `?N` binding semantics verified (T2)
+- [x] 3. multi-statement `execute` audit (T2) — clean, every execute is one statement
 - [ ] 4. Anki dialog type filters parity (T4)
 - [ ] 5. `localhost:4096` CSP origin purpose (T5)
 - [ ] 6. `tinyjs publish` sans `update.url` (T8)
