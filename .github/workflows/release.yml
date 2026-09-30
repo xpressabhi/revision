@@ -18,6 +18,7 @@ env:
 jobs:
   macos:
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,6 +60,7 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,6 +98,7 @@ jobs:
     # glibc floor rule: never build on a distro newer than the support floor
     # (22.04 = glibc 2.35). The guard step below verifies the tarball.
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,8 +111,13 @@ jobs:
 
       - name: Install WebKitGTK runtime
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-0
+          # Fresh runners sometimes have apt-daily/unattended-upgrades holding
+          # the dpkg lock; without DPkg::Lock::Timeout apt waits on it forever
+          # (a 10-minute stall seen in practice). Bound the lock wait and the
+          # network, and keep recommends out of the install.
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            -o DPkg::Lock::Timeout=180 libwebkit2gtk-4.1-0
 
       - name: Install tinyjs CLI
         run: curl -fsSL https://tinyjs.app/install | sh
