@@ -99,16 +99,16 @@ Merge rules: cards are matched by a stable id, the newest content edit wins, sch
 
 ## DB location
 
-- **Tauri app**: app data dir — e.g. `~/Library/Application Support/com.revision.app/revision.db` (macOS). Use **Export backup** for a safe copy.
+- **Desktop app**: app data dir — `~/Library/Application Support/com.revision.app/revision.db` (macOS), `%APPDATA%\com.revision.app\revision.db` (Windows), `~/.local/share/com.revision.app/revision.db` (Linux; the first desktop run copies an existing `revision.db` from the old `~/.config/com.revision.app` automatically). Use **Export backup** for a safe copy.
 - **Web app / browser preview**: IndexedDB database `revision` (cards, states, reviews, decks). Older browser builds stored JSON in `localStorage` under `revision_*`; it is imported into IndexedDB automatically on first launch. Clear site data to reset.
 
 ## Tray, autostart & updates
 
 - **Tray (always visible):** `Due X • New Y` tooltip, menu with `▶ Start Review`, `Show Revision`, `Quit`. Live-updates on every stats refresh.
-- **Launch at login:** Settings toggle (macOS LaunchAgent).
-- **From GitHub**: download the newest installer from the [README download table](../README.md#download--install) — a Release is published automatically on every `v*` tag push.
+- **Launch at login:** Settings toggle (macOS Login Items; on Windows/Linux built apps it registers through the OS — macOS may ask you to approve it in System Settings → Login Items).
+- **From GitHub**: download the newest release from the [README download table](../README.md#download--install) — a Release is published automatically on every `v*` tag push.
 - **From this repo** (no rebuild needed for local tweaks):
 
 ```bash
-npm run tauri:build:install   # builds (debug), copies .app to /Applications, relaunches
+npm run desktop:install   # build + copy .app to /Applications + relaunch
 ```

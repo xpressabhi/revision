@@ -3,7 +3,7 @@
   "title": "Revision",
   "size": "1280x800",
   "id": "com.revision.app",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "minTinyjsVersion": "0.42.3",
   "backend": "backend/main.ts",
   "frontend": {

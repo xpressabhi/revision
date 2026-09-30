@@ -13,7 +13,7 @@ export default defineConfig({
     host: "127.0.0.1",
     watch: {
       // tinyjs scratch output and the backend (its own process) don't affect the page.
-      ignored: ["**/.build/**", "**/backend/**", "**/src-tauri/**"],
+      ignored: ["**/.build/**", "**/backend/**"],
     },
   },
 });

@@ -10,24 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # macOS Apple Silicon
-          - platform: macos-latest
-            os: macos-arm64
-            args: --target aarch64-apple-darwin
-          # macOS Intel (cross-compile on same runner)
-          - platform: macos-latest
-            os: macos-x64
-            args: --target x86_64-apple-darwin
-          - platform: windows-latest
-            os: windows
-            args: ""
-
-    runs-on: ${{ matrix.platform }}
+  macos:
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,19 +19,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
-      - name: Install Rust (nightly for macOS Xcode 27, stable for Windows)
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.platform == 'macos-latest' && 'nightly' || 'stable' }}
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> target"
+      - name: Install tinyjs CLI
+        run: curl -fsSL https://tinyjs.app/install | sh
 
       - name: Install frontend dependencies
         run: npm ci
@@ -55,41 +31,124 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # Tauri Action builds the app and (on tags) creates a GitHub Release with assets.
-      # - On tag push (v*): creates/updates a Release and uploads .dmg/.exe/.msi
-      # - On branch push / manual dispatch: just builds and uploads artifacts for inspection
-      - name: Build with Tauri Action
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # Only create a GitHub Release when a version tag is pushed.
-          # __VERSION__ is replaced by the version in tauri.conf.json / Cargo.toml / package.json
-          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && 'v__VERSION__' || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'Revision v__VERSION__' || '' }}
-          releaseBody: "See the assets to download this version and install.\n\n- macOS: download the .dmg, open it and drag Revision to Applications\n- Windows: download the .exe (NSIS) or .msi and run the installer"
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: false
-          args: ${{ matrix.args }}
+      # Each build re-runs the frontend build (wiping dist/), so stash every
+      # dmg in artifacts/ as it is produced.
+      - name: Build Apple Silicon dmg
+        run: |
+          "$HOME/.tinyjs/tinyjs" build --arch arm64 --dmg
+          mkdir -p artifacts
+          cp dist/*.dmg artifacts/
 
-      # Fallback artifact upload so every build (even non-tag) is downloadable from Actions tab
-      - name: Upload bundle as artifact
-        if: always()
+      - name: Build Intel dmg
+        run: |
+          "$HOME/.tinyjs/tinyjs" build --arch x86_64 --dmg
+          cp dist/*.dmg artifacts/
+
+      - name: Upload dmgs
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-${{ matrix.os }}-${{ github.sha }}
-          path: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/*/release/bundle/dmg/*.dmg
-            src-tauri/target/*/release/bundle/macos/*.app
-            src-tauri/target/*/release/bundle/nsis/*.exe
-            src-tauri/target/*/release/bundle/msi/*.msi
-            src-tauri/target/**/bundle/**/*.dmg
-            src-tauri/target/**/bundle/**/*.exe
-            src-tauri/target/**/bundle/**/*.msi
+          name: macos-dmgs
+          path: artifacts/*.dmg
           if-no-files-found: warn
-          retention-days: 14
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install tinyjs CLI
+        shell: pwsh
+        run: irm https://tinyjs.app/install.ps1 | iex
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Package (portable zip)
+        shell: pwsh
+        run: |
+          $env:Path += ";$env:LOCALAPPDATA\tinyjs"
+          tinyjs publish
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/publish/*.zip
+          if-no-files-found: warn
+
+  linux:
+    # glibc floor rule: never build on a distro newer than the support floor
+    # (22.04 = glibc 2.35). The guard step below verifies the tarball.
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install tinyjs CLI
+        run: curl -fsSL https://tinyjs.app/install | sh
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Package (x86_64 tarball)
+        run: '"$HOME/.tinyjs/tinyjs" publish'
+
+      - name: Verify glibc floor (2.35)
+        run: |
+          latest=$(objdump -T dist/revision | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+          echo "highest glibc symbol: $latest"
+          if [ "$(printf '%s\n' "$latest" GLIBC_2.35 | sort -V | tail -1)" != "GLIBC_2.35" ]; then
+            echo "::error::tarball requires $latest — build on ubuntu 22.04 (glibc 2.35)"
+            exit 1
+          fi
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-tarball
+          path: dist/publish/*.tar.gz
+          if-no-files-found: warn
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: assets
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          - macOS: download the `-macos-arm64.dmg` (Apple Silicon) or `-macos-x86_64.dmg` (Intel), open it and drag Revision to Applications. First launch: right-click → Open if Gatekeeper complains (the app is ad-hoc signed).
+          - Windows: unzip and run `revision.exe` (needs the WebView2 runtime — preinstalled on Windows 11).
+          - Linux: untar and run `./revision` (needs glibc 2.35+ and `libwebkit2gtk-4.1-0`).
+          EOF
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Revision ${GITHUB_REF_NAME#v}" \
+            --notes-file release-notes.md \
+            assets/*

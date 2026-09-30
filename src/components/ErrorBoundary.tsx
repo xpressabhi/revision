@@ -6,7 +6,7 @@ type State = { error: { message: string; stack?: string } | null };
 /**
  * Catches render-time crashes, shows a red banner (so a "blank window" never
  * hides the failure) and forwards the details to the Rust side (visible in
- * `tauri dev` / terminal output) plus the JS console.
+ * `npm run desktop:dev` / terminal output) plus the JS console.
  */
 export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   state: State = { error: null };

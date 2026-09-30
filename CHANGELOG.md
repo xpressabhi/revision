@@ -4,15 +4,23 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 
 ## [Unreleased]
 
+## [v0.8.0] — 2026-09-30 — "tinyjs"
+
 ### Added
 - **Hosted web app**: live at [dailyrevision.vercel.app](https://dailyrevision.vercel.app) — the desktop setup guide now offers "Open the web app" and the README links it.
 - **First-run setup guide** on web and desktop: four steps (review loop, add cards, tune the scheduler, sync or install the other build) with platform-specific copy, progress remembered in `localStorage`, auto-checks as you actually do each step, a dashboard checklist until it's done, and reopen from the keyboard overlay (`?`) or ⌘K.
 - **Walkthrough video** (`docs/media/walkthrough.mp4`) recorded from the real app by `scripts/record-walkthrough.mjs`: first-run guide, review loop, adding a card and a live sync merge (~30s, captioned).
 - **Clutter regression guard**: `scripts/ux-audit.mjs` counts visible chrome controls per view against budgets.
+- **Linux desktop app**: first Linux build (x86_64, glibc 2.35+, `libwebkit2gtk-4.1-0`) — tray, capture hotkey and launch-at-login included.
 
 ### Changed
 - **Clutter-free pass** across every screen: Study has one primary action and three KPIs; Review dropped the gesture pad, grade readout and default inspector, with Skip/Edit/Bury/Suspend behind `···`; Browse hides Import/Export in `···` and drops the Interval/R(t) columns; Progress is down to three KPIs; Settings is three tabs (Study / Data / App) with Advanced collapsed; the keyboard map lives in the `?` overlay; the sidebar hides zero-count filters and speaks plainly ("Likely to forget", "Keep forgetting"). Advanced features stay one ⌘K or `?` away.
 - **Responsive layout**: the web app now works on phones — the sidebar becomes a slide-in drawer with a hamburger (≤900px), the inspector is hidden on narrow screens (≤1080px), grids stack and the editor, guide, command bar, quick capture and help become full-screen or bottom sheets (≤640px). Touch targets are ≥40px, review fills the screen with four compact grade buttons, Browse keeps Front/Due, and safe-area insets are respected.
+- **Desktop shell migrated from Tauri to [tinyjs](https://tinyjs.app)**: the Rust backend is gone. Tray, global `⌥⇧K` capture, native dialogs, launch-at-login, sync-file I/O and SQLite now run in a txiki.js JavaScript backend bundled by the tinyjs CLI. Same React frontend, same UI, same keyboard map.
+- **Smaller downloads**: macOS dmg ≈ 7 MB (was 8.1–8.4 MB). Windows is now a portable **.zip** (no NSIS/MSI installer; WebView2 runtime required, preinstalled on Windows 11).
+- **macOS builds now require macOS 15+** (tinyjs runtime) and remain ad-hoc signed — same right-click → Open first launch as before.
+- Desktop data is untouched on macOS/Windows (same `revision.db` path). On Linux the first run copies the DB from the old config dir (`~/.config/com.revision.app` → `~/.local/share/com.revision.app`); theme/sync-path settings stored in the webview may reset there.
+- Version now lives in two manifests (`package.json`, `tinyjs.json`) instead of three.
 
 ### Fixed
 - **First-run study blocker**: a fresh install persisted "0 new cards per day", leaving the queue permanently empty. Default is now 20, plus a one-time repair for installs that stored 0 with no review history.
@@ -123,7 +131,8 @@ All notable changes to Revision. Releases are published automatically from `v*` 
 - Blind 75 seed (75 LeetCode questions) + 13 starter cards; CSV import/export; import Chrome bookmarks; article import with on-device Zen AI card generation.
 - **Release pipeline**: GitHub Actions matrix build (macOS arm64 / x64 / Windows) — first version with installers + the release workflow.
 
-[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/xpressabhi/revision/compare/v0.8.0...HEAD
+[v0.8.0]: https://github.com/xpressabhi/revision/releases/tag/v0.8.0
 [v0.7.0]: https://github.com/xpressabhi/revision/releases/tag/v0.7.0
 [v0.6.0]: https://github.com/xpressabhi/revision/releases/tag/v0.6.0
 [v0.5.0]: https://github.com/xpressabhi/revision/releases/tag/v0.5.0
