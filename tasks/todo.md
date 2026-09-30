@@ -30,6 +30,7 @@ Plan: `tasks/plan.md`
 - [x] T7: scripts + local packaging (package.json, install script, desktop build/install smoke)
 - [x] T7b: installed to /Applications, launched, ran (2 procs), quit cleanly; dmg 6.8 MB (revision-0.7.0.dmg)
 - [x] T8: CI rewrite + dry run (mac/win/linux jobs) — 3/3 green after pinning the CLI + WebKitGTK; artifacts verified (names, sizes, dmg mounts, ad-hoc signature, embedded frontend in win/linux binaries); release job correct-skipped on branch
+- [x] T8b: hardened linux apt step after a runner lock stall (dpkg lock timeout 180s, network timeouts, job cap 30 min) — re-run green on final head (1m18s)
 - [x] T9: cleanup + docs + version 0.8.0 (delete src-tauri, AGENTS/DEVELOPMENT/USER_GUIDE/CHANGELOG) — README table deferred to post-CI sizes
 
 ### Checkpoint C3 — final
