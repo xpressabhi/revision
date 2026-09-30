@@ -250,7 +250,8 @@ export default function App() {
         setSyncTarget(await getSyncTargetInfo());
         if (isDesktop) {
           try {
-            setAutostart((await tiny.app.launchAtLogin.get()) === "enabled");
+            const state = await tiny.app.launchAtLogin.get();
+            setAutostart(state === "enabled" || state === "requires-approval");
           } catch {}
         }
       } catch (e) {
@@ -1172,9 +1173,9 @@ export default function App() {
         <button className="btn-ghost tb-menu" aria-label="Open navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}>
           <Icon name="sidebar" size={15} />
         </button>
-        <div className="tb-title" data-tauri-drag-region>
+        <div className="tb-title" data-tiny-drag>
           <img className="tb-logo" src="/revision-logo.png" alt="Revision" draggable={false} />
-          <span data-tauri-drag-region>Revision</span>
+          <span data-tiny-drag>Revision</span>
           <span className="muted" style={{ fontWeight: 400 }}>{VIEW_LABEL[view]}</span>
         </div>
         <div className="tb-actions">
@@ -1294,6 +1295,11 @@ export default function App() {
                   const res = await tiny.app.launchAtLogin.set(v);
                   if (res === "unsupported") {
                     toast("Launch at login needs the installed app", "warn");
+                    return;
+                  }
+                  if (res === "requires-approval") {
+                    setAutostart(true);
+                    toast("Approve Revision in System Settings → Login Items", "warn");
                     return;
                   }
                   setAutostart(v);

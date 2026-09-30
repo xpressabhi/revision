@@ -320,8 +320,10 @@ select {
   backdrop-filter: var(--blur-l1);
 }.titlebar.is-desktop {
   padding-left: 82px; /* traffic lights inset */
-}.titlebar [data-tauri-drag-region] {
-  -webkit-app-region: drag;
+}.titlebar [data-tiny-drag] {
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
 }.titlebar .tb-title {
   font-weight: 600;
   font-size: 12.5px;

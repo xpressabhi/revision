@@ -8,6 +8,7 @@ const IS_LINUX = !IS_WIN && /linux/i.test(globalThis.navigator?.platform ?? "");
 let db: Database | null = null;
 let dataDir: string | null = null;
 let ready: Promise<void> | null = null;
+let backendApp: TinyApp | null = null;
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -60,6 +61,22 @@ function dataDirPath(): string {
   return dataDir!;
 }
 
+function traySpec(due: number | null, nw: number | null, total: number | null): TinyTraySpec {
+  return {
+    title: due === null ? undefined : `Due ${due}`,
+    tooltip: due === null ? "Revision — Active Recall" : `Revision — Due ${due} • New ${nw}`,
+    primaryAction: true,
+    menu: [
+      { label: due === null ? "Revision — Loading…" : `Revision — Due ${due} • New ${nw} • Total ${total}`, enabled: false },
+      { separator: true },
+      { id: "review", label: "▶ Start Review" },
+      { id: "show", label: "Show Revision" },
+      { separator: true },
+      { id: "quit", label: "Quit" },
+    ],
+  };
+}
+
 export const api: Record<string, TinyApiHandler> = {
   log: ({ msg }: { msg: string }) => {
     console.log("[page]", String(msg));
@@ -87,6 +104,10 @@ export const api: Record<string, TinyApiHandler> = {
   "fs.writeText": async ({ path, text }: { path: string; text: string }) => {
     await tjs.writeFile(path, new TextEncoder().encode(text));
   },
+  "tray.update": ({ due, new: nw, total }: { due: number; new: number; total: number }) => {
+    backendApp?.tray.set(traySpec(due, nw, total));
+    return true;
+  },
   "anki.stage": async ({ path }: { path: string }) => {
     await ensureReady();
     return stageAnkiFile(path, dataDirPath());
@@ -112,6 +133,41 @@ export const api: Record<string, TinyApiHandler> = {
 };
 
 export function init(app: TinyApp) {
+  backendApp = app;
   ready = bootstrap(app);
+  try {
+    app.tray.set(traySpec(null, null, null));
+  } catch (e) {
+    console.log("[tray] could not set tray: " + e);
+  }
+  try {
+    app.hotkey.register("capture", "alt+shift+k");
+  } catch (e) {
+    console.log("[shortcut] could not register global capture hotkey: " + e);
+  }
+  try {
+    app.window("main").setMinSize(1024, 680);
+  } catch {}
+  try {
+    app.setHideOnClose(true);
+  } catch {}
   console.log("[backend] revision backend up");
+}
+
+export function onHotkey(_id: unknown, app: TinyApp) {
+  app.window("main").show();
+  app.push("global-capture");
+}
+
+export function onTray(id: string | null, app: TinyApp) {
+  if (id === null || id === "show") {
+    app.window("main").show();
+    return;
+  }
+  if (id === "review") {
+    app.window("main").show();
+    app.push("tray-review");
+    return;
+  }
+  if (id === "quit") app.quit();
 }

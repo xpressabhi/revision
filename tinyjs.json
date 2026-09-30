@@ -11,5 +11,10 @@
     "dist": "dist",
     "dev": "npm run dev",
     "devUrl": "http://127.0.0.1:1420"
+  },
+  "chrome": {
+    "frame": false,
+    "windowControls": true,
+    "windowControlsPos": { "x": 18, "y": 19 }
   }
 }

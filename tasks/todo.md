@@ -17,8 +17,9 @@ Plan: `tasks/plan.md`
 
 ## Phase 2 — feature parity on desktop
 
-- [ ] T4: Anki import port (backend anki.*, fflate/fzstd, fixtures, anki.ts, App picker)
-- [ ] T6: tray + hotkey + window behavior + autostart (backend, App.tsx, chrome)
+- [x] T4: Anki import port (backend anki.*, fflate/fzstd, fixtures, anki.ts, App picker)
+- [x] T6: tray + hotkey + window behavior + autostart (backend, App.tsx, chrome)
+- [ ] T6b (manual, user): eyeball traffic-light position, click tray menu, press ⌥⇧K in the running dev app
 
 ### Checkpoint C2 — macOS parity
 - [ ] Manual checklist passes on dev build AND locally built app
@@ -40,9 +41,9 @@ Plan: `tasks/plan.md`
 - [x] 1. `backend/**` auto-restart in `tinyjs dev` (T1) — backend/ not watched; src/ edits restart backend (documented)
 - [x] 2. `?N` binding semantics verified (T2)
 - [x] 3. multi-statement `execute` audit (T2) — clean, every execute is one statement
-- [ ] 4. Anki dialog type filters parity (T4)
-- [ ] 5. `localhost:4096` CSP origin purpose (T5)
+- [x] 4. Anki dialog type filters parity (T4) — same extension list via tiny.dialog.openFile; native title arg not supported by the API
+- [x] 5. `localhost:4096` CSP origin purpose (T5) — checked: only referenced in the old tauri.conf CSP; no code uses it
 - [ ] 6. `tinyjs publish` sans `update.url` (T8)
 - [ ] 7. real artifact names/sizes → README (T7/T8/T9)
-- [ ] 8. chrome overlay values tuning (T6)
-- [ ] 9. `launchAtLogin` states vs autostart toggle UX (T6)
+- [x] 8. chrome overlay values tuning (T6) — x:18 y:19, user eyeball pending
+- [x] 9. `launchAtLogin` states vs autostart toggle UX (T6) — enabled/requires-approval → on; unsupported → warn toast
