@@ -29,13 +29,13 @@ Plan: `tasks/plan.md`
 
 - [x] T7: scripts + local packaging (package.json, install script, desktop build/install smoke)
 - [x] T7b: installed to /Applications, launched, ran (2 procs), quit cleanly; dmg 6.8 MB (revision-0.7.0.dmg)
-- [ ] T8: CI rewrite + dry run (mac/win/linux jobs, artifact names recorded) — run #2 in progress (pinned CLI + WebKitGTK fix); windows job passed run #1
+- [x] T8: CI rewrite + dry run (mac/win/linux jobs) — 3/3 green after pinning the CLI + WebKitGTK; artifacts verified (names, sizes, dmg mounts, ad-hoc signature, embedded frontend in win/linux binaries); release job correct-skipped on branch
 - [x] T9: cleanup + docs + version 0.8.0 (delete src-tauri, AGENTS/DEVELOPMENT/USER_GUIDE/CHANGELOG) — README table deferred to post-CI sizes
 
 ### Checkpoint C3 — final
-- [ ] test + build + desktop build green on clean tree
-- [ ] All acceptance items verified or explicitly deferred
-- [ ] Merge → tag v0.8.0 → verify assets → README sizes
+- [x] test + build + desktop build green on clean tree (77 tests; packaged 0.8.0 run: 28 bridge calls, 0 failures; user DB intact: 188 cards / 49 reviews)
+- [x] All acceptance items verified or explicitly deferred (interactive tray/hotkey/visual checks + win/linux real-machine smoke = user)
+- [ ] Merge → tag v0.8.0 (user) → verify assets → README sizes already updated from CI
 
 ## Spec open items (resolve in-task)
 
@@ -44,7 +44,7 @@ Plan: `tasks/plan.md`
 - [x] 3. multi-statement `execute` audit (T2) — clean, every execute is one statement
 - [x] 4. Anki dialog type filters parity (T4) — same extension list via tiny.dialog.openFile; native title arg not supported by the API
 - [x] 5. `localhost:4096` CSP origin purpose (T5) — checked: only referenced in the old tauri.conf CSP; no code uses it
-- [ ] 6. `tinyjs publish` sans `update.url` (T8)
-- [ ] 7. real artifact names/sizes → README (T7/T8/T9)
+- [x] 6. `tinyjs publish` sans `update.url` (T8) — works; manifest carries a placeholder URL (unused until auto-update is adopted)
+- [x] 7. real artifact names/sizes → README (T7/T8/T9) — revision-0.8.0-{macos-arm64.dmg, macos-x86_64.dmg, win.zip, linux-x86_64.tar.gz}
 - [x] 8. chrome overlay values tuning (T6) — x:18 y:19, user eyeball pending
 - [x] 9. `launchAtLogin` states vs autostart toggle UX (T6) — enabled/requires-approval → on; unsupported → warn toast
