@@ -1,4 +1,4 @@
-import Database from "@tauri-apps/plugin-sql";
+import { desktopCall } from "./platform";
 import type { ImportCardRow } from "./types";
 
 type AnkiNote = { id: number; flds: string; tags: string };
@@ -39,20 +39,20 @@ function deckTag(name: string): string {
 
 /** Read the staged Anki SQLite file and return rows ready for `importCards`. */
 export async function parseAnkiCollection(relPath: string): Promise<ImportCardRow[]> {
-  const db = await Database.load(`sqlite:${relPath}`);
+  await desktopCall("anki.open", { rel: relPath });
   try {
     let deckNames: Record<string, string> = {};
     try {
-      const col = await db.select<{ decks: string }[]>("SELECT decks FROM col LIMIT 1");
+      const col = await desktopCall<{ decks: string }[]>("anki.select", { sql: "SELECT decks FROM col LIMIT 1", params: [] });
       const parsed = JSON.parse(col[0]?.decks ?? "{}") as Record<string, { name?: string }>;
       for (const [id, d] of Object.entries(parsed)) deckNames[id] = d?.name ?? "";
     } catch {
-      const decks = await db.select<{ id: number; name: string }[]>("SELECT id, name FROM decks");
+      const decks = await desktopCall<{ id: number; name: string }[]>("anki.select", { sql: "SELECT id, name FROM decks", params: [] });
       for (const d of decks) deckNames[String(d.id)] = d.name;
     }
 
-    const notes = await db.select<AnkiNote[]>("SELECT id, flds, tags FROM notes");
-    const cards = await db.select<AnkiCard[]>("SELECT nid, did, type, ivl, reps FROM cards");
+    const notes = await desktopCall<AnkiNote[]>("anki.select", { sql: "SELECT id, flds, tags FROM notes", params: [] });
+    const cards = await desktopCall<AnkiCard[]>("anki.select", { sql: "SELECT nid, did, type, ivl, reps FROM cards", params: [] });
     const cardByNote = new Map<number, AnkiCard>();
     for (const c of cards) if (!cardByNote.has(c.nid)) cardByNote.set(c.nid, c);
 
@@ -83,6 +83,6 @@ export async function parseAnkiCollection(relPath: string): Promise<ImportCardRo
     }
     return rows;
   } finally {
-    await db.close();
+    await desktopCall("anki.close").catch(() => {});
   }
 }

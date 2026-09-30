@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeParams, translatePlaceholders } from "./sql";
+import { normalizeParams, queryAll, runStatement, translatePlaceholders } from "./sql";
 
 describe("translatePlaceholders", () => {
   it("rewrites a single $n", () => {
@@ -42,5 +42,44 @@ describe("translatePlaceholders", () => {
 describe("normalizeParams", () => {
   it("maps undefined to null and booleans to 0/1", () => {
     expect(normalizeParams([undefined, true, false, 1, "x", null])).toEqual([null, 1, 0, 1, "x", null]);
+  });
+});
+
+function fakeDb() {
+  const calls: { verb: string; sql: string; args: unknown[] }[] = [];
+  let finalized = 0;
+  return {
+    calls,
+    finalized: () => finalized,
+    prepare(sql: string) {
+      return {
+        run: (...args: unknown[]) => {
+          calls.push({ verb: "run", sql, args });
+        },
+        all: (...args: unknown[]) => {
+          calls.push({ verb: "all", sql, args });
+          return [{ row: 1 }];
+        },
+        finalize: () => {
+          finalized++;
+        },
+      };
+    },
+  };
+}
+
+describe("runStatement / queryAll", () => {
+  it("translates placeholders and binds normalized params", () => {
+    const db = fakeDb();
+    runStatement(db, "UPDATE t SET v = $1 WHERE id = $2", [true, undefined]);
+    expect(db.calls[0]).toEqual({ verb: "run", sql: "UPDATE t SET v = ?1 WHERE id = ?2", args: [1, null] });
+    expect(db.finalized()).toBe(1);
+  });
+
+  it("queryAll returns rows and finalizes", () => {
+    const db = fakeDb();
+    expect(queryAll(db, "SELECT * FROM t WHERE id = $1", [7])).toEqual([{ row: 1 }]);
+    expect(db.calls[0]?.sql).toBe("SELECT * FROM t WHERE id = ?1");
+    expect(db.finalized()).toBe(1);
   });
 });

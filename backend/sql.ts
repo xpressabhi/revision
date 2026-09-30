@@ -63,3 +63,29 @@ export function normalizeParams(params: unknown[]): (string | number | bigint | 
     return p as string | number | bigint | null | Uint8Array;
   });
 }
+
+export interface QueryableDb {
+  prepare(sql: string): {
+    run(...args: unknown[]): void;
+    all(...args: unknown[]): Record<string, unknown>[];
+    finalize(): void;
+  };
+}
+
+export function runStatement(db: QueryableDb, sql: string, params: unknown[]): void {
+  const stmt = db.prepare(translatePlaceholders(sql));
+  try {
+    stmt.run(...normalizeParams(params));
+  } finally {
+    stmt.finalize();
+  }
+}
+
+export function queryAll(db: QueryableDb, sql: string, params: unknown[]): Record<string, unknown>[] {
+  const stmt = db.prepare(translatePlaceholders(sql));
+  try {
+    return stmt.all(...normalizeParams(params));
+  } finally {
+    stmt.finalize();
+  }
+}
