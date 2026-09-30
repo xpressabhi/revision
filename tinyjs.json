@@ -1,0 +1,15 @@
+{
+  "name": "revision",
+  "title": "Revision",
+  "size": "1280x800",
+  "id": "com.revision.app",
+  "version": "0.7.0",
+  "minTinyjsVersion": "0.42.3",
+  "backend": "backend/main.ts",
+  "frontend": {
+    "build": "npm run build",
+    "dist": "dist",
+    "dev": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420"
+  }
+}

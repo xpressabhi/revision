@@ -27,3 +27,5 @@ dist-ssr
 blind75.json
 seed-snippet.ts
 /.playwright-mcp
+.build
+.publish-prev
