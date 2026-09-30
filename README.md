@@ -1,9 +1,9 @@
-# Revision — Active Recall (Tauri + SQLite + Web)
+# Revision — Active Recall (Desktop + Web)
 
 [![Release](https://img.shields.io/github/v/release/xpressabhi/revision?label=latest%20release&style=flat-square)](https://github.com/xpressabhi/revision/releases/latest)
 [![Build](https://github.com/xpressabhi/revision/actions/workflows/release.yml/badge.svg)](https://github.com/xpressabhi/revision/actions/workflows/release.yml)
 
-Local-first study app for principal-level interview prep. **FSRS-5 spaced repetition** for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral** — a keyboard-first, glassmorphic app for macOS, Windows and the browser, with drag gestures.
+Local-first study app for principal-level interview prep. **FSRS-5 spaced repetition** for **DSA / System Design Concepts / System Design Use Cases / AI Concepts / AI Use Cases / Behavioral** — a keyboard-first, glassmorphic app for macOS, Windows, Linux and the browser, with drag gestures.
 
 > Core features work fully offline. Desktop keeps a single SQLite file `revision.db`; the web app keeps everything in the browser (IndexedDB). No account, no telemetry, no network — and you can **sync both through one JSON file** you control.
 
@@ -25,17 +25,20 @@ Deploying the web app is one Vercel project pointing at this repo — see [docs/
 
 ## Download & Install
 
-Latest: **v0.7.0** — releases are built automatically from `v*` tags (see [releases](https://github.com/xpressabhi/revision/releases)). See [CHANGELOG.md](CHANGELOG.md) for what's new per version.
+Latest: **v0.8.0** — releases are built automatically from `v*` tags (see [releases](https://github.com/xpressabhi/revision/releases)). See [CHANGELOG.md](CHANGELOG.md) for what's new per version.
 
-| Platform | Installer | Size |
+| Platform | Download | Size |
 |---|---|---|
-| macOS Apple Silicon (M1/M2/M3/M4) | [Revision_0.7.0_aarch64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_aarch64.dmg) | 8.1 MB |
-| macOS Intel | [Revision_0.7.0_x64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64.dmg) | 8.4 MB |
-| Windows | [Revision_0.7.0_x64-setup.exe](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64-setup.exe) · [.msi](https://github.com/xpressabhi/revision/releases/latest/download/Revision_0.7.0_x64_en-US.msi) | 5.2 MB · 6.7 MB |
+| macOS Apple Silicon (M-series) | [revision-0.8.0-macos-arm64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/revision-0.8.0-macos-arm64.dmg) | 6.3 MB |
+| macOS Intel | [revision-0.8.0-macos-x86_64.dmg](https://github.com/xpressabhi/revision/releases/latest/download/revision-0.8.0-macos-x86_64.dmg) | 6.6 MB |
+| Windows (x64) | [revision-0.8.0-win.zip](https://github.com/xpressabhi/revision/releases/latest/download/revision-0.8.0-win.zip) | 5.5 MB |
+| Linux (x86_64) | [revision-0.8.0-linux-x86_64.tar.gz](https://github.com/xpressabhi/revision/releases/latest/download/revision-0.8.0-linux-x86_64.tar.gz) | 7.0 MB |
 
-Tiny app — every installer is under 9 MB (the old 41 MB MediaPipe bundle is gone).
+Tiny app — every download is under 8 MB (the old 41 MB MediaPipe bundle is long gone).
 
-macOS: open the .dmg and drag Revision to Applications (first launch: right-click → Open if Gatekeeper complains — the app is signed with ad-hoc signatures only). Windows: run the installer.
+**macOS 15+** (Sequoia or newer): open the .dmg and drag Revision to Applications (first launch: right-click → Open if Gatekeeper complains — the app is signed with ad-hoc signatures only).
+**Windows 10/11**: unzip and run `revision.exe` (needs the WebView2 runtime — preinstalled on Windows 11).
+**Linux** (glibc 2.35+, `libwebkit2gtk-4.1-0`): untar and run `./revision` from the extracted folder.
 
 ## Features
 

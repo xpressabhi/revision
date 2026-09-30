@@ -11,9 +11,9 @@ Plan: `tasks/plan.md`
 - [x] T5: sync-file port (backend fs.*, syncFile.ts) — folded into T3 (same platform seam)
 
 ### Checkpoint C1
-- [ ] App functional under `tinyjs dev` on real SQLite data
-- [ ] `npm test` + `npm run build` green
-- [ ] Bridge-latency sanity note recorded
+- [x] App functional under `tinyjs dev` on real SQLite data (30 bridge calls, decks loaded; also verified from the packaged binary: 28 calls, 0 failures)
+- [x] `npm test` + `npm run build` green
+- [x] Bridge-latency sanity: 0.16 ms/small select, ~3 ms/188-row read, 0.19 ms/write — no issue
 
 ## Phase 2 — feature parity on desktop
 
@@ -29,8 +29,8 @@ Plan: `tasks/plan.md`
 
 - [x] T7: scripts + local packaging (package.json, install script, desktop build/install smoke)
 - [x] T7b: installed to /Applications, launched, ran (2 procs), quit cleanly; dmg 6.8 MB (revision-0.7.0.dmg)
-- [ ] T8: CI rewrite + dry run (mac/win/linux jobs, artifact names recorded)
-- [ ] T9: cleanup + docs + version 0.8.0 (delete src-tauri, AGENTS/README/DEVELOPMENT/USER_GUIDE, CHANGELOG)
+- [ ] T8: CI rewrite + dry run (mac/win/linux jobs, artifact names recorded) — run #2 in progress (pinned CLI + WebKitGTK fix); windows job passed run #1
+- [x] T9: cleanup + docs + version 0.8.0 (delete src-tauri, AGENTS/DEVELOPMENT/USER_GUIDE/CHANGELOG) — README table deferred to post-CI sizes
 
 ### Checkpoint C3 — final
 - [ ] test + build + desktop build green on clean tree
