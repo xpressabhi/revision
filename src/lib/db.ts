@@ -1,18 +1,17 @@
-import type Database from "@tauri-apps/plugin-sql";
 import type { CardState, CardWithState, Deck, DeckStats, ImportCardRow, ReviewRow, SyncCard, SyncFile, SyncReview } from "./types";
 import { DEFAULT_EASE, DEFAULT_STABILITY, DEFAULT_DIFFICULTY } from "./fsrs";
-import { isTauriRuntime } from "./platform";
+import { isDesktopRuntime } from "./platform";
 import { newUid } from "./ids";
 import * as idb from "./db/idb";
+import { loadTinyjsDatabase, type TinyjsDatabase } from "./db/tinyjs";
 
-const useBrowserStorage = !isTauriRuntime();
+const useBrowserStorage = !isDesktopRuntime();
 
-let dbInstance: Database | null = null;
+let dbInstance: TinyjsDatabase | null = null;
 
-async function getDb(): Promise<Database> {
+async function getDb(): Promise<TinyjsDatabase> {
   if (dbInstance) return dbInstance;
-  const mod = await import("@tauri-apps/plugin-sql");
-  dbInstance = await mod.default.load("sqlite:revision.db");
+  dbInstance = await loadTinyjsDatabase();
   return dbInstance;
 }
 
@@ -30,7 +29,7 @@ function deckNameToTag(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-async function migrateToSingleDeckTauri(db: Database) {
+async function migrateToSingleDeck(db: TinyjsDatabase) {
   const now = new Date().toISOString();
   const rev = await db.select<{ id: number; name: string }[]>("SELECT id FROM decks WHERE name = $1", ["Revision"]);
   let revisionId: number;
@@ -151,7 +150,7 @@ export async function initDb(): Promise<void> {
   } else {
     const nonRevision = await db.select<{ cnt: number }[]>("SELECT COUNT(*) as cnt FROM decks WHERE name != $1", ["Revision"]);
     if (nonRevision[0].cnt > 0) {
-      await migrateToSingleDeckTauri(db);
+      await migrateToSingleDeck(db);
     }
   }
   await db.execute(
@@ -379,7 +378,7 @@ export async function importCards(deckId: number, rows: ImportCardRow[]): Promis
   }
 }
 
-async function replaceAllTauri(db: Database, snapshot: { cards: SyncCard[]; reviews: SyncReview[] }): Promise<void> {
+async function replaceAllInDb(db: TinyjsDatabase, snapshot: { cards: SyncCard[]; reviews: SyncReview[] }): Promise<void> {
   const decks = await getDecks();
   const deckId = decks[0]?.id;
   if (!deckId) throw new Error("No deck to restore into");
@@ -428,13 +427,13 @@ async function replaceAllTauri(db: Database, snapshot: { cards: SyncCard[]; revi
 export async function applySyncSnapshot(snapshot: { cards: SyncCard[]; reviews: SyncReview[] }): Promise<void> {
   if (useBrowserStorage) return idb.applySyncSnapshot(snapshot);
   const db = await getDb();
-  return replaceAllTauri(db, snapshot);
+  return replaceAllInDb(db, snapshot);
 }
 
 export async function restoreBackup(backup: Pick<SyncFile, "cards" | "reviews">): Promise<void> {
   if (useBrowserStorage) return idb.restoreBackup(backup);
   const db = await getDb();
-  return replaceAllTauri(db, backup);
+  return replaceAllInDb(db, backup);
 }
 
 export async function clearAllCards(): Promise<void> {

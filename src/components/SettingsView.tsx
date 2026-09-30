@@ -17,7 +17,7 @@ type Props = {
   onReviewsPerDay: (n: number) => void;
   autostart: boolean | null;
   onAutostart: (v: boolean) => void;
-  isTauri: boolean;
+  isDesktop: boolean;
   autoBackupAt: string | null;
   onExportBackup: () => void;
   onImportBackupFile: (file: File) => void;
@@ -162,8 +162,8 @@ export function SettingsView(p: Props) {
           <div className="set-card">
             <h3>Import &amp; export</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button className="btn" onClick={() => run("anki", async () => p.onImportAnki())} disabled={busy !== null || !p.isTauri}>
-                <Icon name="layers" size={13} /> {busy === "anki" ? "Importing…" : "Import Anki deck (.apkg)"}{p.isTauri ? "" : " (desktop only)"}
+              <button className="btn" onClick={() => run("anki", async () => p.onImportAnki())} disabled={busy !== null || !p.isDesktop}>
+                <Icon name="layers" size={13} /> {busy === "anki" ? "Importing…" : "Import Anki deck (.apkg)"}{p.isDesktop ? "" : " (desktop only)"}
               </button>
               <button className="btn" onClick={() => run("csv", async () => p.onExportCsv())} disabled={busy !== null}>
                 <Icon name="download" size={13} /> Export CSV
@@ -207,13 +207,13 @@ export function SettingsView(p: Props) {
             <h3>Desktop</h3>
             <div className="set-row">
               <span className="muted">Launch at login</span>
-              <button className={`btn btn-sm ${p.autostart ? "btn-primary" : ""}`} onClick={() => p.onAutostart(!p.autostart)} disabled={p.autostart === null || !p.isTauri}>
+              <button className={`btn btn-sm ${p.autostart ? "btn-primary" : ""}`} onClick={() => p.onAutostart(!p.autostart)} disabled={p.autostart === null || !p.isDesktop}>
                 {p.autostart ? "On" : "Off"}
               </button>
             </div>
             <div className="set-row">
               <span className="muted">Global quick capture <span className="mono">⌥⇧K</span></span>
-              <span className="chip">{p.isTauri ? "registered" : "desktop app only"}</span>
+              <span className="chip">{p.isDesktop ? "registered" : "desktop app only"}</span>
             </div>
             <p style={{ fontSize: 11 }}>The tray shows Due/New and can start a review. In-app: <b>⌘⇧K</b>.</p>
           </div>

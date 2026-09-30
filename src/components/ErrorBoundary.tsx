@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { invokeTauri, isTauriRuntime } from "../lib/platform";
+import { desktopCall, isDesktopRuntime } from "../lib/platform";
 
 type State = { error: { message: string; stack?: string } | null };
 
@@ -41,8 +41,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   private report(err: unknown) {
     const message = err instanceof Error ? `${err.message}${err.stack ? `\n${err.stack.split("\n").slice(1, 4).join("\n")}` : ""}` : String(err);
     console.error("[recall]", message);
-    if (isTauriRuntime()) {
-      void invokeTauri("debug_log", { msg: `[error] ${message}` }).catch(() => {});
+    if (isDesktopRuntime()) {
+      void desktopCall("log", { msg: `[error] ${message}` }).catch(() => {});
     }
   }
 

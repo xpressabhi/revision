@@ -318,7 +318,7 @@ select {
   background: var(--acrylic);
   -webkit-backdrop-filter: var(--blur-l1);
   backdrop-filter: var(--blur-l1);
-}.titlebar.is-tauri {
+}.titlebar.is-desktop {
   padding-left: 82px; /* traffic lights inset */
 }.titlebar [data-tauri-drag-region] {
   -webkit-app-region: drag;
@@ -2544,7 +2544,7 @@ input[type="range"] {
     padding-left: max(10px, env(safe-area-inset-left));
     padding-right: max(10px, env(safe-area-inset-right));
   }
-  .titlebar.is-tauri {
+  .titlebar.is-desktop {
     padding-left: max(10px, env(safe-area-inset-left));
   }
 

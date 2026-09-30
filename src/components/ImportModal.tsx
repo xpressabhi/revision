@@ -5,7 +5,7 @@ type Tab = "file" | "paste" | "anki";
 
 type Props = {
   open: boolean;
-  isTauri: boolean;
+  isDesktop: boolean;
   busy: string | null;
   onClose: () => void;
   onFile: (file: File) => void;
@@ -13,7 +13,7 @@ type Props = {
   onAnki: () => void;
 };
 
-export function ImportModal({ open, isTauri, busy, onClose, onFile, onPaste, onAnki }: Props) {
+export function ImportModal({ open, isDesktop, busy, onClose, onFile, onPaste, onAnki }: Props) {
   const [tab, setTab] = useState<Tab>("file");
   const [pasted, setPasted] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -38,7 +38,7 @@ export function ImportModal({ open, isTauri, busy, onClose, onFile, onPaste, onA
         <div className="editor-tabs">
           <button className={`seg ${tab === "file" ? "active" : ""}`} onClick={() => setTab("file")}>CSV / Bookmarks</button>
           <button className={`seg ${tab === "paste" ? "active" : ""}`} onClick={() => setTab("paste")}>Paste text</button>
-          <button className={`seg ${tab === "anki" ? "active" : ""}`} onClick={() => setTab("anki")} disabled={!isTauri}>Anki</button>
+          <button className={`seg ${tab === "anki" ? "active" : ""}`} onClick={() => setTab("anki")} disabled={!isDesktop}>Anki</button>
         </div>
 
         <div className="modal-body" style={{ gridTemplateColumns: "1fr" }}>
@@ -104,8 +104,8 @@ export function ImportModal({ open, isTauri, busy, onClose, onFile, onPaste, onA
                   Pick a <span className="mono">.apkg</span> export or a raw <span className="mono">collection.anki2</span> file.
                   Decks become tag trees. Review cards keep their interval; scheduling is approximated from Anki's interval.
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={onAnki} disabled={busy !== null || !isTauri}>
-                  {busy === "anki" ? "Importing…" : isTauri ? "Choose .apkg…" : "Desktop app only"}
+                <button className="btn btn-primary btn-sm" onClick={onAnki} disabled={busy !== null || !isDesktop}>
+                  {busy === "anki" ? "Importing…" : isDesktop ? "Choose .apkg…" : "Desktop app only"}
                 </button>
               </div>
             </div>

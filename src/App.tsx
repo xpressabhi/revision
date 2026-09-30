@@ -28,7 +28,7 @@ import { matchesChord, scopeKeys } from "./lib/hotkeys";
 import { AUTO_END_DEFAULT_MIN, isAutoEnd, isStale, SWEEP_MS, STALE_DEFAULT, STALE_OPTIONS, type StaleThreshold } from "./lib/session";
 import { autoBackupAt, buildBackup, downloadBackup, loadAutoBackup, parseBackupFile, saveAutoBackup } from "./lib/backup";
 import { DEFAULT_DIFFICULTY, DEFAULT_STABILITY } from "./lib/fsrs";
-import { isTauriRuntime, invokeTauri, onTauriEvent, openExternal } from "./lib/platform";
+import { desktopCall, isDesktopRuntime, onDesktopEvent, openExternal } from "./lib/platform";
 import { describeStats } from "./lib/sync";
 import {
   dismiss as dismissGetStarted,
@@ -124,7 +124,7 @@ const VIEW_LABEL: Record<View, string> = {
 let toastSeq = 1;
 
 export default function App() {
-  const [isTauri] = useState(() => isTauriRuntime());
+  const [isDesktop] = useState(() => isDesktopRuntime());
   const [loading, setLoading] = useState(true);
   const [decks, setDecks] = useState<{ id: number; name: string; created_at: string }[]>([]);
   const [cards, setCards] = useState<CardWithState[]>([]);
@@ -213,13 +213,13 @@ export default function App() {
       const due = s.reduce((x, y) => x + y.due, 0);
       const newCount = s.reduce((x, y) => x + y.newCount, 0);
       const total = s.reduce((x, y) => x + y.total, 0);
-      if (isTauri) {
-        void invokeTauri("update_tray", { due, new: newCount, total }).catch(() => {});
+      if (isDesktop) {
+        void desktopCall("tray.update", { due, new: newCount, total }).catch(() => {});
       }
     } catch (e) {
       toast(`Could not load data: ${String(e).slice(0, 100)}`, "error");
     }
-  }, [toast, isTauri]);
+  }, [toast, isDesktop]);
 
   // ── boot ──
   const bootedRef = useRef(false);
@@ -248,10 +248,9 @@ export default function App() {
           }
         }
         setSyncTarget(await getSyncTargetInfo());
-        if (isTauri) {
+        if (isDesktop) {
           try {
-            const { isEnabled } = await import("@tauri-apps/plugin-autostart");
-            setAutostart(await isEnabled());
+            setAutostart((await tiny.app.launchAtLogin.get()) === "enabled");
           } catch {}
         }
       } catch (e) {
@@ -266,31 +265,29 @@ export default function App() {
         }
       }
     })();
-  }, [refresh, toast, isTauri, updateGuide]);
+  }, [refresh, toast, isDesktop, updateGuide]);
 
   // ── tray + global capture → review / capture ──
   const startReviewRef = useRef<(scope: StudyScope) => void>(() => {});
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isDesktop) return;
     let cancelled = false;
     const unlisteners: (() => void)[] = [];
-    (async () => {
-      try {
-        const tray = await onTauriEvent("tray-review", () => startReviewRef.current({ kind: "all" }));
-        const capture = await onTauriEvent("global-capture", () => setCaptureOpen(true));
-        if (cancelled) {
-          tray();
-          capture();
-        } else {
-          unlisteners.push(tray, capture);
-        }
-      } catch {}
-    })();
+    try {
+      const tray = onDesktopEvent("tray-review", () => startReviewRef.current({ kind: "all" }));
+      const capture = onDesktopEvent("global-capture", () => setCaptureOpen(true));
+      if (cancelled) {
+        tray();
+        capture();
+      } else {
+        unlisteners.push(tray, capture);
+      }
+    } catch {}
     return () => {
       cancelled = true;
       for (const un of unlisteners) un();
     };
-  }, [isTauri]);
+  }, [isDesktop]);
 
   // ── refresh when another tab writes (IndexedDB has no storage event) ──
   useEffect(() => onExternalChange(() => void refresh()), [refresh]);
@@ -923,23 +920,17 @@ export default function App() {
   };
 
   const importAnki = async () => {
-    if (!isTauri) return;
+    if (!isDesktop) return;
     setImportBusy("anki");
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: false,
-        directory: false,
-        title: "Choose an Anki export (.apkg) or collection.anki2",
-        filters: [{ name: "Anki", extensions: ["apkg", "anki2", "anki21", "zip"] }],
-      });
-      if (!selected || Array.isArray(selected)) return;
-      const rel = await invokeTauri<string>("stage_anki_db", { path: selected });
+      const selected = await tiny.dialog.openFile({ types: ["apkg", "anki2", "anki21", "zip"] });
+      if (!selected) return;
+      const rel = await desktopCall<string>("anki.stage", { path: selected });
       const { parseAnkiCollection } = await import("./lib/anki");
       const rows = await parseAnkiCollection(rel);
       if (!rows.length) throw new Error("No cards found in this Anki deck");
       const created = await importCards(decks[0]?.id ?? 1, rows);
-      await invokeTauri("cleanup_anki_import").catch(() => {});
+      await desktopCall("anki.cleanup").catch(() => {});
       await refresh();
       markGuideStep("cards");
       toast(`Imported ${created} cards from Anki`, "success");
@@ -1177,7 +1168,7 @@ export default function App() {
   return (
     <div className={`shell ${sidebarMode === "rail" ? "rail" : ""} ${sidebarMode === "hidden" ? "no-sidebar" : ""} ${!inspectorOpen ? "no-inspector" : ""} ${mobileNavOpen ? "mobile-nav-open" : ""}`}>
       {/* titlebar */}
-      <header className={`titlebar ${isTauri ? "is-tauri" : ""}`}>
+      <header className={`titlebar ${isDesktop ? "is-desktop" : ""}`}>
         <button className="btn-ghost tb-menu" aria-label="Open navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}>
           <Icon name="sidebar" size={15} />
         </button>
@@ -1300,15 +1291,18 @@ export default function App() {
               autostart={autostart}
               onAutostart={async (v) => {
                 try {
-                  const { enable, disable } = await import("@tauri-apps/plugin-autostart");
-                  if (v) await enable(); else await disable();
+                  const res = await tiny.app.launchAtLogin.set(v);
+                  if (res === "unsupported") {
+                    toast("Launch at login needs the installed app", "warn");
+                    return;
+                  }
                   setAutostart(v);
                   toast(`Launch at login ${v ? "enabled" : "disabled"}`, "success");
                 } catch {
                   toast("Autostart requires the desktop app", "warn");
                 }
               }}
-              isTauri={isTauri}
+              isDesktop={isDesktop}
               autoBackupAt={autoBackupTs}
               onExportBackup={async () => exportBackup()}
               onImportBackupFile={importBackupFile}
@@ -1358,7 +1352,7 @@ export default function App() {
       <QuickCapture open={captureOpen} groups={groups.map((g) => g.full)} onClose={() => setCaptureOpen(false)} onSave={async (f, b, t) => { await createCard(decks[0]?.id ?? 1, f, b, t); await refresh(); toast("Card captured", "success"); }} />
       <ImportModal
         open={importOpen}
-        isTauri={isTauri}
+        isDesktop={isDesktop}
         busy={importBusy}
         onClose={() => setImportOpen(false)}
         onFile={(f) => void handleImportFile(f)}
@@ -1369,7 +1363,7 @@ export default function App() {
       {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} onSetupGuide={openGuide} />}
       {guideOpen && (
         <GetStarted
-          isTauri={isTauri}
+          isDesktop={isDesktop}
           state={guide}
           onClose={closeGuide}
           onDismissForever={dismissGuideForever}

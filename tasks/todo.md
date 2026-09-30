@@ -7,7 +7,8 @@ Plan: `tasks/plan.md`
 
 - [x] T1: tinyjs scaffold + first dev boot (tinyjs.json, icon.png, backend skeleton, types)
 - [x] T2: backend DB api + `$n→?n` translation + tests + multi-statement audit
-- [ ] T3: frontend desktop seam (platform.ts, db/tinyjs.ts, db.ts, vite.config.ts)
+- [x] T3: frontend desktop seam (platform.ts, db/tinyjs.ts, db.ts, vite.config.ts)
+- [x] T5: sync-file port (backend fs.*, syncFile.ts) — folded into T3 (same platform seam)
 
 ### Checkpoint C1
 - [ ] App functional under `tinyjs dev` on real SQLite data
@@ -17,7 +18,6 @@ Plan: `tasks/plan.md`
 ## Phase 2 — feature parity on desktop
 
 - [ ] T4: Anki import port (backend anki.*, fflate/fzstd, fixtures, anki.ts, App picker)
-- [ ] T5: sync-file port (backend fs.*, syncFile.ts)
 - [ ] T6: tray + hotkey + window behavior + autostart (backend, App.tsx, chrome)
 
 ### Checkpoint C2 — macOS parity

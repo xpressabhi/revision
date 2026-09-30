@@ -4,14 +4,14 @@ import { WEB_APP_URL } from "../lib/links";
 import { Icon } from "./ui";
 
 type Props = {
-  isTauri: boolean;
+  isDesktop: boolean;
   state: GetStartedState;
   onClose: () => void;
   onDismissForever: () => void;
   onAction: (action: GuideAction, step: GuideStepId) => void;
 };
 
-export function GetStarted({ isTauri, state, onClose, onDismissForever, onAction }: Props) {
+export function GetStarted({ isDesktop, state, onClose, onDismissForever, onAction }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -20,7 +20,7 @@ export function GetStarted({ isTauri, state, onClose, onDismissForever, onAction
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const steps = stepsFor(isTauri ? "desktop" : "web", WEB_APP_URL.length > 0);
+  const steps = stepsFor(isDesktop ? "desktop" : "web", WEB_APP_URL.length > 0);
   const done = doneCount(state);
 
   return (
@@ -37,7 +37,7 @@ export function GetStarted({ isTauri, state, onClose, onDismissForever, onAction
 
         <div className="guide-body">
           <p className="guide-intro">
-            {isTauri
+            {isDesktop
               ? "You're in the desktop app. Four steps and Revision is set up the way you study."
               : "You're in the web app — everything stays in this browser. Four steps and you're ready."}
           </p>

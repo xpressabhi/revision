@@ -1,4 +1,4 @@
-import { isTauriRuntime } from "./platform";
+import { desktopCall, isDesktopRuntime } from "./platform";
 import { applySyncSnapshot, getSyncSnapshot } from "./db";
 import { makeSyncFile, mergeSync, parseSyncFile, type MergeStats } from "./sync";
 import type { SyncFile } from "./types";
@@ -100,7 +100,7 @@ async function ensurePermission(handle: FsFileHandle, mode: "read" | "readwrite"
 
 // ── target info / attach / detach ──────────────────────────────────
 export async function getSyncTargetInfo(): Promise<SyncTargetInfo> {
-  if (isTauriRuntime()) {
+  if (isDesktopRuntime()) {
     const path = typeof localStorage !== "undefined" ? localStorage.getItem(LS_SYNC_PATH) : null;
     return { mode: "desktop", label: path ? path.split(/[\\/]/).pop() ?? path : null, canAttach: true };
   }
@@ -112,13 +112,8 @@ export async function getSyncTargetInfo(): Promise<SyncTargetInfo> {
 }
 
 export async function attachSyncTarget(): Promise<string | null> {
-  if (isTauriRuntime()) {
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const path = await save({
-      title: "Choose a sync file shared with the other Revision app",
-      defaultPath: "revision-sync.json",
-      filters: [{ name: "Revision sync", extensions: ["json"] }],
-    });
+  if (isDesktopRuntime()) {
+    const path = await tiny.dialog.saveFile({ types: ["json"] });
     if (!path) return null;
     localStorage.setItem(LS_SYNC_PATH, path);
     return path.split(/[\\/]/).pop() ?? path;
@@ -139,7 +134,7 @@ export async function attachSyncTarget(): Promise<string | null> {
 }
 
 export async function detachSyncTarget(): Promise<void> {
-  if (isTauriRuntime()) {
+  if (isDesktopRuntime()) {
     localStorage.removeItem(LS_SYNC_PATH);
     return;
   }
@@ -148,12 +143,11 @@ export async function detachSyncTarget(): Promise<void> {
 
 // ── read / write ───────────────────────────────────────────────────
 export async function readSyncTarget(): Promise<string | null> {
-  if (isTauriRuntime()) {
+  if (isDesktopRuntime()) {
     const path = localStorage.getItem(LS_SYNC_PATH);
     if (!path) return null;
-    const { exists, readTextFile } = await import("@tauri-apps/plugin-fs");
-    if (!(await exists(path))) return null;
-    return readTextFile(path);
+    if (!(await desktopCall<boolean>("fs.exists", { path }))) return null;
+    return desktopCall<string>("fs.readText", { path });
   }
   const handle = await getHandle();
   if (!handle) return null;
@@ -168,11 +162,10 @@ export async function readSyncTarget(): Promise<string | null> {
 }
 
 export async function writeSyncTarget(text: string): Promise<void> {
-  if (isTauriRuntime()) {
+  if (isDesktopRuntime()) {
     const path = localStorage.getItem(LS_SYNC_PATH);
     if (!path) throw new Error("Attach a sync file first");
-    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
-    await writeTextFile(path, text);
+    await desktopCall("fs.writeText", { path, text });
     return;
   }
   const handle = await getHandle();

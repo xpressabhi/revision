@@ -82,6 +82,14 @@ export const api: Record<string, TinyApiHandler> = {
       rowsAffected: (meta[0]?.n as number | undefined) ?? 0,
     };
   },
+  "fs.exists": ({ path }: { path: string }) => exists(path),
+  "fs.readText": async ({ path }: { path: string }) => {
+    const data = await tjs.readFile(path);
+    return new TextDecoder().decode(data);
+  },
+  "fs.writeText": async ({ path, text }: { path: string; text: string }) => {
+    await tjs.writeFile(path, new TextEncoder().encode(text));
+  },
 };
 
 export function init(app: TinyApp) {
