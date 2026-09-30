@@ -9,6 +9,12 @@ on:
 permissions:
   contents: write
 
+env:
+  # Pin the tinyjs CLI (matches minTinyjsVersion). The unpinned installer
+  # resolves "latest" through the unauthenticated GitHub API, which is
+  # rate-limited on shared runner IPs.
+  TINYJS_VERSION: v0.42.3
+
 jobs:
   macos:
     runs-on: macos-latest
@@ -99,6 +105,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Install WebKitGTK runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-0
 
       - name: Install tinyjs CLI
         run: curl -fsSL https://tinyjs.app/install | sh
